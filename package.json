@@ -1,10 +1,25 @@
 {
 	"name": "jest-test-explorer",
-	"displayName": "jest-test-explorer",
-	"description": "Jest Test Explorer for VSCode",
+	"displayName": "Jest Test Explorer",
+	"description": "Jest Test Explorer for Visual Studio Code",
 	"version": "0.0.1",
+	"preview": true,
+	"author": "Gibbs Maynor <g.maynor@gmail.com>",
 	"publisher": "gmaynor",
 	"license": "MIT",
+	"homepage": "https://github.com/gmaynor/vscode-jest-test-explorer",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/gmaynor/vscode-jest-test-explorer.git"
+	},
+	"bugs": {
+		"url": "https://github.com/gmaynor/vscode-jest-test-explorer/issues"
+	},
+	"keywords": [
+		"test",
+		"testing",
+		"jest"
+	],
 	"engines": {
 		"vscode": "^1.28.0"
 	},
