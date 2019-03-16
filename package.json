@@ -1,0 +1,218 @@
+{
+	"name": "jest-test-explorer",
+	"displayName": "jest-test-explorer",
+	"description": "Jest Test Explorer for VSCode",
+	"version": "0.0.1",
+	"publisher": "gmaynor",
+	"license": "MIT",
+	"engines": {
+		"vscode": "^1.28.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"*"
+	],
+	"main": "./out/extension.js",
+	"contributes": {
+		"views": {
+			"test": [
+				{
+					"id": "jestTestExplorer",
+					"name": "Jest Test Explorer"
+				}
+			]
+		},
+		"commands": [
+			{
+				"command": "jest-test-explorer.showLog",
+				"title": "Show log",
+				"icon": {
+					"light": "resources/light/log.svg",
+					"dark": "resources/dark/log.svg"
+				}
+			},
+			{
+				"command": "jest-test-explorer.stop",
+				"title": "Stop running proccesses",
+				"icon": {
+					"light": "resources/light/stop.svg",
+					"dark": "resources/dark/stop.svg"
+				}
+			},
+			{
+				"command": "jest-test-explorer.refreshTestExplorer",
+				"title": "Refresh",
+				"icon": {
+					"light": "resources/light/refresh.svg",
+					"dark": "resources/dark/refresh.svg"
+				}
+			},
+			{
+				"command": "jest-test-explorer.runAllTests",
+				"title": "Run All Tests",
+				"icon": {
+					"light": "resources/light/run.png",
+					"dark": "resources/dark/run.png"
+				}
+			},
+			{
+				"command": "jest-test-explorer.runTest",
+				"title": "Run Test",
+				"icon": {
+					"light": "resources/light/run.svg",
+					"dark": "resources/dark/run.svg"
+				}
+			},
+			{
+				"command": "jest-test-explorer.runTestInContext",
+				"title": "Run Jest Test in context"
+			},
+			{
+				"command": "jest-test-explorer.gotoTest",
+				"title": "Go to Test",
+				"icon": {
+					"light": "resources/light/gototest.svg",
+					"dark": "resources/dark/gototest.svg"
+				}
+			}
+		],
+		"menus": {
+			"view/title": [
+				{
+					"command": "jest-test-explorer.showLog",
+					"when": "view == jestTestExplorer",
+					"group": "navigation@3"
+				},
+				{
+					"command": "jest-test-explorer.stop",
+					"when": "view == jestTestExplorer",
+					"group": "navigation@2"
+				},
+				{
+					"command": "jest-test-explorer.refreshTestExplorer",
+					"when": "view == jestTestExplorer",
+					"group": "navigation@1"
+				},
+				{
+					"command": "jest-test-explorer.runAllTests",
+					"when": "view == jestTestExplorer",
+					"group": "navigation@0"
+				}
+			],
+			"view/item/context": [
+				{
+					"command": "jest-test-explorer.runTest",
+					"when": "view == jestTestExplorer",
+					"group": "jestTestExplorer@0"
+				},
+				{
+					"command": "jest-test-explorer.runTest",
+					"when": "view == jestTestExplorer",
+					"group": "inline"
+				},
+				{
+					"command": "jest-test-explorer.gotoTest",
+					"when": "viewItem == test",
+					"group": "jestTestExplorer@1"
+				}
+			],
+			"editor/context": [
+				{
+					"command": "jest-test-explorer.runTestInContext",
+					"group": "jestTestExplorer@0",
+					"when": "resourceLangId == javascript"
+				},
+				{
+					"command": "jest-test-explorer.runTestInContext",
+					"group": "jestTestExplorer@0",
+					"when": "resourceLangId == typescript"
+				}
+			]
+		},
+		"configuration": {
+			"type": "object",
+			"title": "Jest Test Explorer",
+			"properties": {
+				"jest-test-explorer.useTreeView": {
+					"type": "boolean",
+					"default": true,
+					"description": "If false, will list all tests as the full namespace. When set to true a tree will be created based on the namespaces of the tests."
+				},
+				"jest-test-explorer.showCodeLens": {
+					"type": "boolean",
+					"default": true,
+					"description": "Determines whether to show the CodeLens test status or not."
+				},
+				"jest-test-explorer.codeLensFailed": {
+					"type": "string",
+					"default": "",
+					"description": "The text to display in the code lens when a test has failed."
+				},
+				"jest-test-explorer.codeLensPassed": {
+					"type": "string",
+					"default": "",
+					"description": "The text to display in the code lens when a test has passed."
+				},
+				"jest-test-explorer.codeLensSkipped": {
+					"type": "string",
+					"default": "",
+					"description": "The text to display in the code lens when a test has been skipped."
+				},
+				"jest-test-explorer.pathForResultFile": {
+					"type": "string",
+					"default": "",
+					"description": "The path to (temporarily) store test result files in"
+				},
+				"jest-test-explorer.autoExpandTree": {
+					"type": "boolean",
+					"default": false,
+					"description": "If true, the tree will be in an expanded state by default"
+				},
+				"jest-test-explorer.addProblems": {
+					"type": "boolean",
+					"default": true,
+					"description": "If true, failed test will add to the problems view"
+				},
+				"jest-test-explorer.autoWatch": {
+					"type": "boolean",
+					"default": false,
+					"description": "If true, starts jest watch test after test discovery is completed"
+				},
+				"jest-test-explorer.testArguments": {
+					"type": "string",
+					"default": "",
+					"description": "Additional arguments that are added to the jest command."
+				}
+			}
+		}
+	},
+	"scripts": {
+		"postinstall": "node ./node_modules/vscode/bin/install",
+		"clean": "rimraf out *.vsix",
+		"build": "tsc -p ./",
+		"watch": "tsc -w -p ./",
+		"rebuild": "npm run clean && npm run build",
+		"package": "vsce package -o build/vscode-jest-test-explorer.vsix",
+		"publish": "vsce publish",
+		"vscode:prepublish": "npm run build"
+	},
+	"devDependencies": {
+		"@types/node": "^10.14.1",
+		"tslint": "^5.14.0",
+		"typescript": "^3.3.1",
+		"vsce": "^1.58.0",
+		"vscode": "^1.1.28"
+	},
+	"dependencies": {
+		"@types/babel-types": "^7.0.6",
+		"@types/babylon": "^6.16.5",
+		"@types/fkill": "^5.3.0",
+		"@types/glob": "^7.1.1",
+		"babel-types": "^6.26.0",
+		"babylon": "^6.18.0",
+		"chokidar": "^2.1.2",
+		"fkill": "^5.3.0"
+	}
+}
