@@ -2,11 +2,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { TreeDataProvider, TreeItem } from 'vscode';
 import Logger from './logger';
-import { StatusBar } from './statusbar';
 import { TestCommands } from './testCommands';
-// import { ITestNode, ErrorTestNode, LoadingTestNode, TestNode } from './testNode';
-// import { TestResultAccumulator } from './testResult';
-// import { IParseResult, ItNode } from './testFileParseResults';
 import { ITestNode } from './nodes';
 import { Utility, TestNodeType, DefaultPosition, DefaultRange } from './utility';
 
@@ -49,7 +45,7 @@ export class JestTestExplorerTreeDataProvider implements TreeDataProvider<ITestN
     private _onDidChangeTreeData: vscode.EventEmitter<any> = new vscode.EventEmitter<any>();
     public readonly onDidChangeTreeData: vscode.Event<any> = this._onDidChangeTreeData.event;
 
-    constructor(private context: vscode.ExtensionContext, private testCommands: TestCommands, private statusBar: StatusBar) {
+    constructor(private context: vscode.ExtensionContext, private testCommands: TestCommands) {
         testCommands.onTestDiscoveryStarted(this.updateWithDiscoveringTests, this);
         testCommands.onTestDiscoveryFinished(this.updateWithDiscoveredTests, this);
         testCommands.onTestRun(this.updateTreeWithRunningTests, this);
@@ -129,8 +125,6 @@ export class JestTestExplorerTreeDataProvider implements TreeDataProvider<ITestN
 
     private updateTreeWithRunningTests(node: ITestNode) {
         const testRun: ITestNode[] = node.isContainer ? node.itBlocks || [] : [node];
-
-        this.statusBar.testRunning(testRun.length);
 
         testRun.forEach((testNode: ITestNode) => {
             testNode.running = true;

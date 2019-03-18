@@ -17,12 +17,12 @@ export class TestCommands {
     public async discoverTests() {
         this.onTestDiscoveryStartedEmitter.fire();
 
-        this.testDirectories.clearTestsForDirectory();
-
         try {
-            await loadTests(this.testDirectories.getTestDirectories());
+            const rootNode = await loadTests(this.testDirectories.getTestDirectories());
 
-            this.onTestDiscoveryFinishedEmitter.fire(getRootNode());
+            this.onTestDiscoveryFinishedEmitter.fire(rootNode);
+            
+            Logger.info(`${rootNode.itBlocks ? rootNode.itBlocks.length : 0} tests discovered.`);
         } catch (error) {
             this.onTestDiscoveryFinishedEmitter.fire();
         }

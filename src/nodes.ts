@@ -299,7 +299,7 @@ export const getRootNode = ():ITestNode | undefined => {
     return _rootNode;
 };
 
-export const loadTests = async (jestDirs: IJestDirectory[]): Promise<void> => {
+export const loadTests = async (jestDirs: IJestDirectory[]): Promise<ITestNode> => {
     const pResults: ParseResult[] = [];
     for (let jestDir of jestDirs) {
         pResults.push(await discoverTests(jestDir));
@@ -333,6 +333,8 @@ export const loadTests = async (jestDirs: IJestDirectory[]): Promise<void> => {
 
         _rootNode.mergeWith(pRoot);
     });
+
+    return _rootNode;
 };
 
 

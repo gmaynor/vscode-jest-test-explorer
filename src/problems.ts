@@ -15,6 +15,9 @@ export class Problems {
                 }
                     , results);
             }
+            else if (!test.isContainer && test.testResult && test.testResult.status === 'failed') {
+                failedTests.push(test.testResult);
+            }
             return results;
         }, [] as Array<ITestResult>);
 

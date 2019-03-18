@@ -21,7 +21,7 @@
 		"jest"
 	],
 	"engines": {
-		"vscode": "^1.28.0"
+		"vscode": "^1.30.0"
 	},
 	"categories": [
 		"Other"
@@ -206,6 +206,7 @@
 	"scripts": {
 		"postinstall": "node ./node_modules/vscode/bin/install",
 		"clean": "rimraf out *.vsix",
+		"compile": "tsc -p ./",
 		"build": "tsc -p ./",
 		"watch": "tsc -w -p ./",
 		"rebuild": "npm run clean && npm run build",
@@ -218,7 +219,7 @@
 		"tslint": "^5.14.0",
 		"typescript": "^3.3.1",
 		"vsce": "^1.58.0",
-		"vscode": "^1.1.28"
+		"vscode": "^1.1.30"
 	},
 	"dependencies": {
 		"@types/babel-types": "^7.0.6",

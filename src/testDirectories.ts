@@ -1,7 +1,4 @@
-import * as fs from "fs";
-import * as glob from "glob";
 import * as path from "path";
-import { promisify } from 'util';
 import * as vscode from "vscode";
 import Logger from "./logger";
 import { Utility } from "./utility";
@@ -31,7 +28,10 @@ export class TestDirectories {
     private readonly jestExecIgnoreDirs: string[] = [ ".vscode", "node_modules", "bin", "obj", "coverage" ];
 
     private executors: IJestDirectory[] = [];
-    private testsForDirectory: Array<{ dir: string, name: string }> = [];
+
+
+    private _onTestDirectorySearchCompleted: vscode.EventEmitter<IJestDirectory[]> = new vscode.EventEmitter<IJestDirectory[]>();
+    public readonly onTestDirectorySearchCompleted: vscode.Event<IJestDirectory[]> = this._onTestDirectorySearchCompleted.event;
 
     /* Search all Workspace Folders for directories containing Jest Test files.
        We are assuming that Jest will be installed locally for projects that
@@ -47,36 +47,11 @@ export class TestDirectories {
         await this.findExecutors();
         const end = Date.now();
         Logger.info(`Found ${this.executors.length} Jest Projects in ${(end - start) / 1000} seconds.`);
+        this._onTestDirectorySearchCompleted.fire(this.executors.slice());
     }
 
-    /* Add discovered tests to the list */
-    public addTestsForDirectory(testsForDirectory?: Array<{ dir: string, name: string }>) {
-        if (!testsForDirectory) {
-            return;
-        }
-
-        this.testsForDirectory = this.testsForDirectory.concat(testsForDirectory);
-    }
-
-    /* Clear the list of discovered tests */
-    public clearTestsForDirectory() {
-        this.testsForDirectory = [];
-    }
-
-    /* Get the directories containing tests whose names begin
-       with the given string.  Returns all test directories 
-       if no testName is provided */
-    public getTestDirectories(testName?: string): IJestDirectory[] {
-
-        if (testName && testName !== "") {
-            const dirForTestName = this
-                .testsForDirectory
-                .filter((t) => t.name.startsWith(testName))
-                .map((t) => t.dir);
-
-            return this.executors.filter(x => dirForTestName.indexOf(x.projectPath) > -1);
-        }
-
+    /* Get all directories where Jest Tests may be found */
+    public getTestDirectories(): IJestDirectory[] {
         return this.executors.slice();
     }
 
