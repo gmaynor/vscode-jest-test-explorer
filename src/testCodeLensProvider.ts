@@ -63,6 +63,23 @@ class RunTestCodeLens extends CodeLens {
     }
 }
 
+class DebugTestCodeLens extends CodeLens {
+
+    public constructor(filePath: string, testNode: ITestNode) {
+        const start = testNode.position(filePath);
+        super(new Range(start, start));
+
+        const cmd: Command = {
+            title: 'debug test',
+            command: "jest-test-explorer.debugTest",
+            tooltip: 'Debugs the specified test',
+            arguments: [testNode]
+        };
+
+        this.command = cmd;
+    }
+}
+
 export class TestCodeLensProvider implements CodeLensProvider {
     private disposables: Disposable[] = [];
     private onDidChangeCodeLensesEmitter = new EventEmitter<void>();
@@ -74,9 +91,9 @@ export class TestCodeLensProvider implements CodeLensProvider {
 
     public dispose() {
         while (this.disposables.length) {
-            const popped = this.disposables.pop();
-            if (popped) {
-                popped.dispose();
+            const disposable = this.disposables.pop();
+            if (disposable) {
+                disposable.dispose();
             }
         }
     }
@@ -106,6 +123,9 @@ export class TestCodeLensProvider implements CodeLensProvider {
                     }
                 }
                 mapped.push(new RunTestCodeLens(document.uri.path, x));
+                if (!x.isContainer) {
+                    mapped.push(new DebugTestCodeLens(document.uri.path, x));
+                }
             });
         }
 

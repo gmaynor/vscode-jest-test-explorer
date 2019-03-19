@@ -7,6 +7,7 @@ export interface IJestDirectory {
     projectPath: string;
     jestPath: string;
     configPath: string;
+    workspaceFolder: vscode.WorkspaceFolder;
 }
 
 export class JestTestFile {
@@ -43,10 +44,8 @@ export class TestDirectories {
         }
 
         Logger.info("Finding Jest Projects in workspace folders.");
-        const start = Date.now();
         await this.findExecutors();
-        const end = Date.now();
-        Logger.info(`Found ${this.executors.length} Jest Projects in ${(end - start) / 1000} seconds.`);
+        Logger.info(`Found ${this.executors.length} Jest Projects.`);
         this._onTestDirectorySearchCompleted.fire(this.executors.slice());
     }
 
@@ -66,7 +65,7 @@ export class TestDirectories {
         vscode.workspace.workspaceFolders.forEach(x => wsfExecPromises.push(this.getJestTestDirectories(x.uri.fsPath).then((dirs: string[]) => {
             const dirPromises: Promise<IJestDirectory>[] = [];
             dirs.forEach(dir => { 
-                dirPromises.push( this.getJestConfigPath(dir).then(configPath => { return <IJestDirectory>{ projectPath: dir, jestPath: path.normalize(path.resolve(dir, this.jestExecSubPath)), configPath: configPath }; }));
+                dirPromises.push( this.getJestConfigPath(dir).then(configPath => { return <IJestDirectory>{ projectPath: dir, jestPath: path.normalize(path.resolve(dir, this.jestExecSubPath)), configPath: configPath, workspaceFolder: x }; }));
             });
             return Promise.all(dirPromises);
         })));

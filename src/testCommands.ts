@@ -1,7 +1,8 @@
-import { commands, Event, EventEmitter } from "vscode";
+import { commands, Event, EventEmitter, Disposable, debug, workspace, WorkspaceFolder, Uri } from "vscode";
 import { Executor } from "./executor";
 import Logger from "./logger";
 import { TestDirectories, IJestDirectory } from "./testDirectories";
+import { DebugConfigurationProvider } from './debugConfigurationProvider';
 import { ITestNode, loadTests, getRootNode, parseTestResults } from './nodes';
 
 export class TestCommands {
@@ -10,22 +11,25 @@ export class TestCommands {
     private onTestRunEmitter = new EventEmitter<ITestNode>();
     private onTestStoppedEmitter = new EventEmitter<void>();
     private onTestResultsUpdatedEmitter = new EventEmitter<ITestNode[]>();
+    private _debugConfigProvider: DebugConfigurationProvider | undefined;
+    private _debugConfigDisposables: Disposable[] = [];
 
     constructor(private testDirectories: TestDirectories) { 
+        testDirectories.onTestDirectorySearchCompleted(this.initializeDebugConfigProvider, this);
     }
 
     public async discoverTests() {
         this.onTestDiscoveryStartedEmitter.fire();
 
+        let rootNode: ITestNode | undefined = undefined;
         try {
-            const rootNode = await loadTests(this.testDirectories.getTestDirectories());
+            rootNode = await loadTests(this.testDirectories.getTestDirectories());
 
-            this.onTestDiscoveryFinishedEmitter.fire(rootNode);
-            
             Logger.info(`${rootNode.itBlocks ? rootNode.itBlocks.length : 0} tests discovered.`);
         } catch (error) {
-            this.onTestDiscoveryFinishedEmitter.fire();
+            Logger.error(`Error during test discovery: ${error}`);
         }
+        this.onTestDiscoveryFinishedEmitter.fire(rootNode);
     }
 
     public get onTestDiscoveryStarted(): Event<string> {
@@ -62,28 +66,54 @@ export class TestCommands {
         }
     }
 
-    private runTestCommand(test?: ITestNode): void {
+    public async debugTest(test: ITestNode): Promise<void> {
+        if (!this._debugConfigProvider) {
+            Logger.warn('Unable to debug tests at this time.');
+            return;
+        }
 
-        commands.executeCommand("workbench.view.extension.test", "workbench.view.extension.test");
+        this.stopTests();
 
-        const testDirectories = test && !test.isContainer && test.jestTestFile ? [test.jestTestFile.jestDirectory] : this.testDirectories.getTestDirectories();
+        this._debugConfigProvider.prepareTestRun(test);
 
-        // We want to make sure test runs across multiple directories are run in sequence to avoid excessive cpu usage
-        const runSeq = async () => {
-            try {
-                for (let i = 0; i < testDirectories.length; i++) {
-                    await this.runTestCommandForSpecificDirectory(testDirectories[i], test, i);
-                }
-            } catch (err) {
-                Logger.error(`Error while executing test command: ${err}`);
-                this.discoverTests();
-            }
-        };
+        const handle = debug.onDidTerminateDebugSession(() => {
+            handle.dispose();
+            this.stopTests();
+        }, this);
 
-        runSeq();
+        let workspaceFolder: WorkspaceFolder | undefined;
+        if (test.jestTestFile) {
+            workspaceFolder = workspace.getWorkspaceFolder(Uri.parse(test.jestTestFile.jestDirectory.projectPath));
+        }
+        else if (workspace.workspaceFolders) {
+            workspaceFolder = workspace.workspaceFolders[0];
+        }
+
+        try {
+          // try to run the debug configuration from launch.json
+          await debug.startDebugging(workspaceFolder, 'vscode-jest-tests');
+        } catch {
+          // if that fails, there (probably) isn't any debug configuration (at least no correctly named one)
+          // therefore debug the test using the default configuration
+          const debugConfiguration = this._debugConfigProvider.provideDebugConfigurations(workspaceFolder)[0];
+          await debug.startDebugging(workspaceFolder, debugConfiguration);
+        }
     }
 
-    private runTestCommandForSpecificDirectory(jestDir: IJestDirectory, test: ITestNode | undefined, index: number): Promise<void> {
+    public dispose() {
+        this.unregisterDebugConfigProvider();
+    }
+
+    private initializeDebugConfigProvider(dirs: IJestDirectory[]) {
+        this.unregisterDebugConfigProvider();
+        this._debugConfigProvider = new DebugConfigurationProvider(dirs, this.getJestCommand);
+        // this provides the opportunity to inject test names into the DebugConfiguration
+        this._debugConfigDisposables.push(debug.registerDebugConfigurationProvider('node', this._debugConfigProvider));
+        // this provides the snippets generation
+        this._debugConfigDisposables.push(debug.registerDebugConfigurationProvider('vscode-jest-tests', this._debugConfigProvider));
+    }
+
+    private getJestCommand(jestDir: IJestDirectory, test?: ITestNode): { command: string, commandArgs: string[] } {
         const command = jestDir.jestPath;
         const commandArgs: string[] = ["--ci", `--rootDir ${jestDir.projectPath} --json --testLocationInResults`];
 
@@ -98,6 +128,33 @@ export class TestCommands {
             }
             commandArgs.push(` -t "${testName}"`);
         }
+
+        return { command, commandArgs };
+    }
+
+    private runTestCommand(test?: ITestNode): void {
+
+        commands.executeCommand("workbench.view.extension.test", "workbench.view.extension.test");
+
+        const testDirectories = test && !test.isContainer && test.jestTestFile ? [test.jestTestFile.jestDirectory] : this.testDirectories.getTestDirectories();
+
+        // We want to make sure test runs across multiple directories are run in sequence to avoid excessive cpu usage
+        const runSeq = async () => {
+            try {
+                for (let i = 0; i < testDirectories.length; i++) {
+                    await this.runTestCommandForSpecificDirectory(testDirectories[i], test);
+                }
+            } catch (err) {
+                Logger.error(`Error while executing test command: ${err}`);
+                this.discoverTests();
+            }
+        };
+
+        runSeq();
+    }
+
+    private runTestCommandForSpecificDirectory(jestDir: IJestDirectory, test: ITestNode | undefined): Promise<void> {
+        const { command, commandArgs } = this.getJestCommand(jestDir, test);
 
         this.onTestRunEmitter.fire(test || getRootNode());
 
@@ -128,5 +185,14 @@ export class TestCommands {
     private fireTestResultsUpdated() {
         const root = getRootNode();
         this.onTestResultsUpdatedEmitter.fire(root ? root.children : undefined);
+    }
+
+    private unregisterDebugConfigProvider() {
+        while (this._debugConfigDisposables.length) {
+            const disposable = this._debugConfigDisposables.pop();
+            if (disposable) {
+                disposable.dispose();
+            }
+        }
     }
 }

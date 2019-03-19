@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import { TestCommands } from './testCommands';
 import { IJestDirectory, JestTestFile } from './testDirectories';
 import { ParseResult, discoverTests } from './testDiscovery';
 import { TestNodeType, TestNodeTypes, TestStatus, DefaultPosition, DefaultRange } from './utility';
+import { stat } from 'fs';
 
 export type DescribeLocation = {
   file: JestTestFile,
@@ -30,6 +30,48 @@ export interface ITestNode {
   position(filePath: string): vscode.Position;
   nameRange(filePath: string): vscode.Range;
   mergeWith(other: ITestNode): void;
+}
+
+interface IFn {
+  name: string;
+  loc: vscode.Range;
+  decl?: vscode.Range;
+}
+interface IBranch {
+  type: string;
+  loc: vscode.Range;
+  locations: vscode.Range[];
+}
+interface IMap<T> {
+  [key: number]: T;
+}
+interface ICoverageLoc {
+  start: { line: number, column: number };
+  end: { line: number, column: number };
+}
+interface ICoverageMetric {
+  name: string;
+  instanceCount: number;
+  hitCount: number;
+  percentage: number;
+}
+interface ICoverageMetrics {
+  [key: string]: ICoverageMetric;
+}
+
+export interface IFileCoverageResult {
+  path: string;
+  branchMap: IMap<IBranch>;
+  fnMap: IMap<IFn>;
+  statementMap: IMap<vscode.Range>;
+  branchHits: IMap<number[]>;
+  fnHits: IMap<number>;
+  statementHits: IMap<number>;
+  metrics: ICoverageMetrics;
+}
+
+export interface ICoverageMap {
+  [key: string]: IFileCoverageResult;
 }
 
 const getNewParseResult = (type: TestNodeType, file?: JestTestFile, name?: string): RootNode | DescribeNode | ItNode => {
@@ -292,12 +334,100 @@ class ItNode extends TestNode {
   }
 }
 
+class FileCoverageResult implements IFileCoverageResult {
+  public readonly branchMap: IMap<IBranch> = {};
+  public readonly fnMap: IMap<IFn> = {};
+  public readonly statementMap: IMap<vscode.Range> = {};
+  public readonly branchHits: IMap<number[]> = {};
+  public readonly fnHits: IMap<number> = {};
+  public readonly statementHits: IMap<number> = {};
+  public readonly metrics: ICoverageMetrics = {};
+  private readonly _path: string;
+
+  public static locToRange(loc: ICoverageLoc): vscode.Range {
+    const posInvalid = (pos: { line: number | null, column: number | null}): boolean => {
+      if (pos.line === null || pos.line < 0) {
+        return true;
+      }
+      if (pos.column === null || pos.column < 0) {
+        return true;
+      }
+      return false;
+    };
+    if (posInvalid(loc.start)) {
+      return DefaultRange;
+    }
+    if (posInvalid(loc.end)) {
+      loc.end = loc.start;
+    }
+    return new vscode.Range(loc.start.line - 1, loc.start.column, loc.end.line - 1, loc.end.column);
+  }
+
+  public constructor(jsonNode: any) {
+    this._path = jsonNode.path;
+    Object.keys(jsonNode.branchMap).map(key => parseInt(key)).forEach(key => {
+      const tmp = jsonNode.branchMap[key];
+      this.branchMap[key] = { type: tmp.type, loc: FileCoverageResult.locToRange(tmp.loc), locations: (tmp.locations as ICoverageLoc[]).map(loc => FileCoverageResult.locToRange(loc)) };
+    });
+    Object.keys(jsonNode.fnMap).map(key => parseInt(key)).forEach(key => {
+      const tmp = jsonNode.fnMap[key];
+      this.fnMap[key] = { name: tmp.name, loc: FileCoverageResult.locToRange(tmp.loc), decl: tmp.decl ? FileCoverageResult.locToRange(tmp.decl) : undefined };
+    });
+    Object.keys(jsonNode.statementMap).map(key => parseInt(key)).forEach(key => {
+      const tmp = jsonNode.statementMap[key];
+      this.statementMap[key] = FileCoverageResult.locToRange(tmp);
+    });
+    Object.keys(jsonNode.b).map(key => parseInt(key)).forEach(key => {
+      this.branchHits[key] = [ ...jsonNode.b[key] ];
+    });
+    Object.keys(jsonNode.f).map(key => parseInt(key)).forEach(key => {
+      this.fnHits[key] = jsonNode.f[key];
+    });
+    Object.keys(jsonNode.s).map(key => parseInt(key)).forEach(key => {
+      this.statementHits[key] = jsonNode.s[key];
+    });
+
+    this.calculateMetrics();
+  }
+
+  public get path(): string {
+    return this._path;
+  }
+
+  private calculateMetrics() {
+    const getHits = (key: string, map: IMap<number> | IMap<number[]>) => {
+      const keyNum = parseInt(key);
+      let hits: number | number[] = map[keyNum];
+      if (!Array.isArray(hits)) {
+        return hits > 0 ? 1 : 0;
+      }
+      return hits.reduce((out, hit) => { if (hit > 0) { out += 1; } return out; }, 0);
+    };
+    const statements = Object.keys(this.statementMap).length;
+    const statementHits = Object.keys(this.statementHits).reduce((count: number, key: string) => { count += getHits(key, this.statementHits); return count; }, 0);
+    const fns = Object.keys(this.fnMap).length;
+    const fnHits = Object.keys(this.fnHits).reduce((count: number, key: string) => { count += getHits(key, this.fnHits); return count; }, 0);
+    const branches = Object.keys(this.branchMap).reduce((count, key) => { const keyNum = parseInt(key); count += this.branchMap[keyNum].locations.length; return count; }, 0);
+    const branchHits = Object.keys(this.branchHits).reduce((count: number, key: string) => { count += getHits(key, this.branchHits); return count; }, 0);
+
+    this.metrics['statements'] = { name: 'statement coverage', instanceCount: statements, hitCount: statementHits, percentage: statementHits / statements };
+    this.metrics['functions'] = { name: 'function coverage', instanceCount: fns, hitCount: fnHits, percentage: fnHits / fns };
+    this.metrics['branches'] = { name: 'branch coverage', instanceCount: branches, hitCount: branchHits, percentage: branchHits / branches };
+  }
+}
+
 
 let _rootNode: RootNode;
+let _coverageMap: ICoverageMap;
 
 export const getRootNode = ():ITestNode | undefined => {
     return _rootNode;
 };
+
+export const getCoverageMap = (): ICoverageMap | undefined => {
+  return _coverageMap;
+};
+
 
 export const loadTests = async (jestDirs: IJestDirectory[]): Promise<ITestNode> => {
     const pResults: ParseResult[] = [];
@@ -362,4 +492,6 @@ export const parseTestResults = (stdout: string): void => {
             }
         });
     });
+
+    _coverageMap = Object.keys(rawResult.coverageMap).reduce((out, key) => { out[key] = new FileCoverageResult(rawResult.coverageMap[key]); return out; }, {} as ICoverageMap);
 };

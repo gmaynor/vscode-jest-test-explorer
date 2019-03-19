@@ -8,6 +8,7 @@ import { Problems } from './problems';
 import { StatusBar } from './statusbar';
 import { GotoTest } from './gotoTest';
 import { JestTestExplorerTreeDataProvider } from './testExplorerTree';
+import { registerCoverageCodeLens } from './coverageCodeLensProvider';
 import { TestCodeLensProvider } from './testCodeLensProvider';
 import { ITestNode } from './nodes';
 import { Utility } from './utility';
@@ -22,10 +23,12 @@ export function activate(context: vscode.ExtensionContext) {
 	const statusbar = new StatusBar(testCommands);
 	context.subscriptions.push(statusbar);
 
+	disposables.push(vscode.Disposable.from(testCommands));
+
 	const treeDataProvider = new JestTestExplorerTreeDataProvider(context, testCommands);
 	const tree = vscode.window.createTreeView("jestTestExplorer", { treeDataProvider });
 
-	testDirectories.onTestDirectorySearchCompleted((dirs) => onJestDirectoriesDiscovered(context, testCommands, tree, dirs));
+	testDirectories.onTestDirectorySearchCompleted((dirs) => { if (!dirs || !dirs.length) { statusbar.dispose(); } else { onJestDirectoriesDiscovered(context, testCommands, tree, dirs); } });
 
 
 	Logger.info("Starting Jest Test Explorer");
@@ -34,17 +37,13 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 function onJestDirectoriesDiscovered(context: vscode.ExtensionContext, testCommands: TestCommands, tree: vscode.TreeView<ITestNode | undefined>, dirs: IJestDirectory[]) {
-	if (!dirs.length) {
-		return;
-	}
-	const gotoTest = new GotoTest();
-	const problems = new Problems(testCommands);
-
 	Logger.info("Jest Project Directories :");
 	dirs.forEach(x => {
 		Logger.info(`                            ${x.projectPath}`);
 	});
-
+	const gotoTest = new GotoTest();
+	const problems = new Problems(testCommands);
+	
 	context.subscriptions.push(problems);
 
 	Utility.updateCache();
@@ -54,6 +53,8 @@ function onJestDirectoriesDiscovered(context: vscode.ExtensionContext, testComma
 	context.subscriptions.push(vscode.languages.registerCodeLensProvider(
 		[{ language: "javascript", scheme: "file" }, { language: "typescript", scheme: "file" }],
 		codeLensProvider));
+
+	context.subscriptions.push(...registerCoverageCodeLens(testCommands));
 
 	context.subscriptions.push(vscode.commands.registerCommand("jest-test-explorer.showLog", () => {
 		Logger.show();
@@ -78,6 +79,13 @@ function onJestDirectoriesDiscovered(context: vscode.ExtensionContext, testComma
 	context.subscriptions.push(vscode.commands.registerTextEditorCommand("jest-test-explorer.runTestInContext", (editor: vscode.TextEditor, edit: vscode.TextEditorEdit, test: ITestNode) => {
 		const openTestView = vscode.commands.executeCommand("workbench.view.extension.test", "workbench.view.extension.test");
 		openTestView.then(() => tree.reveal(test, {select: false, focus: true, expand: 3})).then(() => testCommands.runTest(test));
+	}));
+
+	context.subscriptions.push(vscode.commands.registerTextEditorCommand("jest-test-explorer.debugTest", (editor: vscode.TextEditor, edit: vscode.TextEditorEdit, test: ITestNode) => {
+		const openTestView = vscode.commands.executeCommand("workbench.view.extension.test", "workbench.view.extension.test");
+		openTestView.then(() => tree.reveal(test, {select: false, focus: true, expand: 3})).then(() => {
+			testCommands.debugTest(test);
+		});
 	}));
 
 	context.subscriptions.push(vscode.commands.registerCommand("jest-test-explorer.gotoTest", (test: ITestNode) => {

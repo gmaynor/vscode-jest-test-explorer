@@ -30,7 +30,9 @@ export class Problems {
                     if (fileLines && fileLines.length) {
                         const failedLine = fileLines[0].substring(fileLines[0].indexOf(val) + val.length + 1);
                         const parts = failedLine.substring(0, failedLine.length - 1).split(':');
-                        groups[val].push(new vscode.Diagnostic(new vscode.Range(parseInt(parts[0]) - 1, parseInt(parts[1]) - 1, parseInt(parts[0]) - 1, parseInt(parts[1]) + 100), fm));
+                        const diag = new vscode.Diagnostic(new vscode.Range(parseInt(parts[0]) - 1, parseInt(parts[1]) - 1, parseInt(parts[0]) - 1, parseInt(parts[1]) + 100), fm, vscode.DiagnosticSeverity.Error);
+                        diag.source = 'Jest';
+                        groups[val].push(diag);
                     }
                 });
             }
@@ -44,6 +46,7 @@ export class Problems {
         if (Utility.getConfiguration().get<boolean>("addProblems")) {
             testCommands.onTestResultsUpdated(this.addTestResults, this);
             this._diagnosticCollection = vscode.languages.createDiagnosticCollection("jest-test-explorer");
+            testCommands.onTestDiscoveryFinished(() => this._diagnosticCollection && this._diagnosticCollection.clear());
         }
     }
 
