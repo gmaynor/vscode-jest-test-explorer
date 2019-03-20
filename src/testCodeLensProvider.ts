@@ -4,56 +4,19 @@ import { TestCommands } from "./testCommands";
 import { getRootNode, ITestNode } from './nodes';
 import { Utility, DefaultPosition } from "./utility";
 
-class TestStatusCodeLens extends CodeLens {
-
-    public static fromTestNode(filePath: string, test: ITestNode): TestStatusCodeLens | undefined {
-        if (!test.testResult) {
-            return;
-        }
-
-        const icon = TestStatusCodeLens.parseOutcome(test.testResult.status);
-
-        if (!icon.length) {
-            return;
-        }
-
-        return new TestStatusCodeLens(filePath, test, icon, test.testResult.failureMessages);
-    }
-
-    public constructor(filePath: string, result: ITestNode, icon: string, failureMessages?: string[]) {
-        const start = result.position(filePath);
-        const range = new Range(start, start);
-        
-        super(range);
-
-        this.command = {
-            title: icon,
-            command: '',
-            tooltip: failureMessages ? failureMessages.join('\n\n') : undefined
-        };
-    }
-
-    private static parseOutcome(outcome: string): string {
-        if (outcome === "passed") {
-            return Utility.codeLensPassed;
-        } else if (outcome === "failed") {
-            return Utility.codeLensFailed;
-        } else if (outcome === "skipped") {
-            return Utility.codeLensSkipped;
-        } else {
-            return "";
-        }
-    }
-}
-
 class RunTestCodeLens extends CodeLens {
 
     public constructor(filePath: string, testNode: ITestNode) {
         const start = testNode.position(filePath);
         super(new Range(start, start));
 
+        let lensTitle = testNode.isContainer ? 'run tests' : 'run test';
+        if (testNode.testResult && (testNode.testResult.status === 'passed' || testNode.testResult.status === 'failed')) {
+            lensTitle = `re-${lensTitle}`;
+        }
+
         const cmd: Command = {
-            title: testNode.children && testNode.children.length > 0 ? 'run tests' : 'run test',
+            title: lensTitle,
             command: "jest-test-explorer.runTestInContext",
             tooltip: 'Runs the specified test(s)',
             arguments: [testNode]
@@ -116,12 +79,6 @@ export class TestCodeLensProvider implements CodeLensProvider {
         const mapped: CodeLens[] = [];
         if (resultsForFile.length) {
             resultsForFile.forEach(x => {
-                if (x.testResult) {
-                    const tLens = TestStatusCodeLens.fromTestNode(filePath, x);
-                    if (tLens) {
-                        mapped.push(tLens);
-                    }
-                }
                 mapped.push(new RunTestCodeLens(document.uri.path, x));
                 if (!x.isContainer) {
                     mapped.push(new DebugTestCodeLens(document.uri.path, x));

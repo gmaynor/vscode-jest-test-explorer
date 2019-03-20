@@ -18,11 +18,12 @@ export const existsP = promisify(fs.exists);
 export const DefaultPosition: vscode.Position = new vscode.Position(0.01, 0.01);
 export const DefaultRange: vscode.Range = new vscode.Range(DefaultPosition, DefaultPosition);
 
-export type TestNodeType = 'root' | 'describe' | 'it';
+export type TestNodeType = 'root' | 'describe' | 'it' | 'expect';
 export const TestNodeTypes = {
   root: 'root',
   describe: 'describe',
-  it: 'it'
+  it: 'it',
+  expect: 'expect'
 };
 
 export type TestStatus = 'pending' | 'passed' | 'failed' | 'skipped' | 'todo';
@@ -42,6 +43,10 @@ export class Utility {
 
     public static get codeLensSkipped(): string {
         return Utility.skipped;
+    }
+
+    public static get codeLensNotRun(): string {
+        return Utility.notRun;
     }
 
     public static get defaultCollapsibleState(): vscode.TreeItemCollapsibleState {
@@ -71,6 +76,7 @@ export class Utility {
         Utility.failed = Utility.getLensText(configuration, "codeLensFailed", "\u2715"); // Multiplication Sign
         Utility.passed = Utility.getLensText(configuration, "codeLensPassed", osx ? "\u2705" : "\u2714"); // White Heavy Check Mark / Heavy Check Mark
         Utility.skipped = Utility.getLensText(configuration, "codeLensSkipped", "\u26a0"); // Warning
+        Utility.notRun = Utility.getLensText(configuration, "codeLensNotRun", "\u25cb"); // Open Circle
         Utility.autoExpandTree = configuration.get<boolean>("autoExpandTree", false);
     }
 
@@ -167,6 +173,7 @@ export class Utility {
     private static failed: string;
     private static passed: string;
     private static skipped: string;
+    private static notRun: string;
 
     private static getLensText(configuration: vscode.WorkspaceConfiguration, name: string, fallback: string): string {
         // This is an invisible character that indicates the previous character

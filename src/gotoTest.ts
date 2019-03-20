@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import Logger from './logger';
 import { ITestNode } from './nodes';
+import { DefaultRange } from './utility';
 
 export class GotoTest {
 
@@ -19,10 +20,10 @@ export class GotoTest {
                     if (!vscode.window.activeTextEditor) {
                         return;
                     }
-                    if (!nameRange) {
+                    if (nameRange === DefaultRange) {
                         return;
                     }
-                    const selection = new vscode.Selection(nameRange.start, nameRange.start);
+                    const selection = new vscode.Selection(nameRange.start, nameRange.end);
                     vscode.window.activeTextEditor.selection = selection;
                     vscode.window.activeTextEditor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
                 });

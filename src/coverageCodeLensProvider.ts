@@ -5,7 +5,7 @@ import { getCoverageMap, ICoverageMap } from './nodes';
 export function registerCoverageCodeLens(commands: TestCommands) {
   return [
     vscode.languages.registerCodeLensProvider(
-      { pattern: '**/*.{ts,tsx,js,jsx}' },
+      { pattern: '**/*.{ts,tsx,js,jsx}', scheme: 'file' },
       new CoverageCodeLensProvider(commands)
     ),
   ];
@@ -47,7 +47,7 @@ class CoverageCodeLensProvider implements vscode.CodeLensProvider {
 
     const range = new vscode.Range(0, 0, 0, 0);
     const command: vscode.Command = {
-      title: metrics,
+      title: `Code Coverage : ${metrics}`,
       command: '',
     };
 

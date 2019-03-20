@@ -10,6 +10,7 @@ import { GotoTest } from './gotoTest';
 import { JestTestExplorerTreeDataProvider } from './testExplorerTree';
 import { registerCoverageCodeLens } from './coverageCodeLensProvider';
 import { TestCodeLensProvider } from './testCodeLensProvider';
+import { EditorDecorations } from './decorations';
 import { ITestNode } from './nodes';
 import { Utility } from './utility';
 
@@ -18,6 +19,9 @@ const disposables: vscode.Disposable[] = [];
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+
+	Utility.updateCache();
+
 	const testDirectories = new TestDirectories();
 	const testCommands = new TestCommands(testDirectories);
 	const statusbar = new StatusBar(testCommands);
@@ -43,10 +47,10 @@ function onJestDirectoriesDiscovered(context: vscode.ExtensionContext, testComma
 	});
 	const gotoTest = new GotoTest();
 	const problems = new Problems(testCommands);
+	const editorDeco = new EditorDecorations(testCommands);
 	
 	context.subscriptions.push(problems);
-
-	Utility.updateCache();
+	context.subscriptions.push(editorDeco);
 
 	const codeLensProvider = new TestCodeLensProvider(testCommands);
 	context.subscriptions.push(codeLensProvider);

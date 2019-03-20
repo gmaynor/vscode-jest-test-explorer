@@ -21,18 +21,22 @@ export class Problems {
             return results;
         }, [] as Array<ITestResult>);
 
-        return failedTests.reduce((groups: any, item) => {
-            const val = item.testNode.jestTestFile ? item.testNode.jestTestFile.path : 'file path not found';
-            if (item.failureMessages) {
-                groups[val] = groups[val] || [];
-                item.failureMessages.forEach(fm => {
-                    const fileLines = fm.split('\n').filter(l => l.includes(val));
+        return failedTests.reduce((groups: any, test) => {
+            const filePath = test.testNode.jestTestFile ? test.testNode.jestTestFile.path : 'file path not found';
+            if (test.failureMessages) {
+                groups[filePath] = groups[filePath] || [];
+                test.failureMessages.forEach(fm => {
+                    const fileLines = fm.split('\n').filter(l => l.includes(filePath));
                     if (fileLines && fileLines.length) {
-                        const failedLine = fileLines[0].substring(fileLines[0].indexOf(val) + val.length + 1);
-                        const parts = failedLine.substring(0, failedLine.length - 1).split(':');
-                        const diag = new vscode.Diagnostic(new vscode.Range(parseInt(parts[0]) - 1, parseInt(parts[1]) - 1, parseInt(parts[0]) - 1, parseInt(parts[1]) + 100), fm, vscode.DiagnosticSeverity.Error);
-                        diag.source = 'Jest';
-                        groups[val].push(diag);
+                        const failedLine = fileLines[0].substring(fileLines[0].indexOf(filePath) + filePath.length + 1);
+                        const parts = failedLine.substring(0, failedLine.length - 1).split(':').map(x => parseInt(x));
+                        const point = new vscode.Position(parts[0] - 1, parts[1]);
+                        const foundExpect = test.testNode.expects ? test.testNode.expects.find(expect => expect.range(filePath).contains(point)) : undefined;
+                        if (foundExpect) {
+                            const diag = new vscode.Diagnostic(foundExpect.range(filePath), fm, vscode.DiagnosticSeverity.Error);
+                            diag.source = 'Jest';
+                            groups[filePath].push(diag);
+                        }
                     }
                 });
             }

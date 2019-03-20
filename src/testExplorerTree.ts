@@ -24,6 +24,12 @@ class ArtificialTestNode implements ITestNode {
     position(filePath: string): vscode.Position {
         return DefaultPosition;
     }
+    range(filePath: string): vscode.Range {
+        return DefaultRange;
+    }
+    namePosition(filePath: string): vscode.Position {
+        return DefaultPosition;
+    }
     nameRange(filePath: string): vscode.Range {
         return DefaultRange;
     }

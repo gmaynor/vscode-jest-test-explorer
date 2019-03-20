@@ -21,7 +21,7 @@ import { Executor } from './executor';
 import Logger from './logger';
 import { IJestDirectory, JestTestFile } from './testDirectories';
 import { IMessage } from './messages';
-import { readfileP, TestNodeType, TestNodeTypes } from './utility';
+import { readfileP, TestNodeType, TestNodeTypes, DefaultRange } from './utility';
 
 export function discoverTests(jestDir: IJestDirectory): Promise<ParseResult> {
     Logger.info(`Discovering tests in '${jestDir.projectPath}'`);
@@ -54,23 +54,26 @@ function getJestTestFiles(jestDir: IJestDirectory): Promise<string[]> {
     });
 }
 
-type ResultLocation = {
+export type ResultLocation = {
     file: JestTestFile,
     start: vscode.Position,
     end: vscode.Position
   };
   
-  type NameAndRange = {
+  type NameAndRanges = {
     name?: string,
-    range?: vscode.Range
+    range?: vscode.Range,
+    nameRange?: vscode.Range
   };
   
   export class ParseResult {
     private _type: TestNodeType;
     private _locations: ResultLocation[] = [];
+    private _nameLocations: ResultLocation[] = [];
     private _children?: ParseResult[];
+    private _expects?: ParseResult[];
   
-    constructor(type: TestNodeType, private _name?: string) {
+    constructor(type: TestNodeType, private _name?: string, private _fnName?: string) {
       this._type = type;
     }
   
@@ -81,20 +84,43 @@ type ResultLocation = {
     public get name(): string | undefined {
       return this._name;
     }
+
+    public get fnName(): string | undefined {
+      return this._fnName;
+    }
   
     public get locations(): ResultLocation[] {
       return this._locations;
+    }
+
+    public get nameLocations(): ResultLocation[] {
+      return this._nameLocations;
     }
   
     public get children(): ParseResult[] | undefined {
       return this._children;
     }
+
+    public get expects(): ParseResult[] | undefined {
+      return this._expects;
+    }
   
     public addChild(child: ParseResult) {
+      if (child._type === TestNodeTypes.expect) {
+        this.addExpect(child);
+        return;
+      }
       if (!this._children) {
         this._children = [];
       }
       this._children.push(child);
+    }
+
+    private addExpect(expect: ParseResult) {
+      if (!this._expects) {
+        this._expects = [];
+      }
+      this._expects.push(expect);
     }
   }
   
@@ -119,6 +145,13 @@ type ResultLocation = {
   const isFunctionDeclaration = (nodeType: string) => nodeType === 'ArrowFunctionExpression' || nodeType === 'FunctionExpression';
   
   // When given a node in the AST, does this represent
+  // the start of an expect expression?
+  const isAnExpect = (node: BabylonNode) => {
+    const name = getNameForNode(node);
+    return name === 'expect';
+  };
+
+  // When given a node in the AST, does this represent
   // the start of an it/test block?
   const isAnIt = (node: BabylonNode) => {
     const name = getNameForNode(node);
@@ -131,10 +164,15 @@ type ResultLocation = {
   };
   
   const getGetNameAndRange = (ast: GetAstResult) => {
-    return (bNode: BabylonNode): NameAndRange => {
+    return (bNode: BabylonNode): NameAndRanges => {
       if (!isFunctionCall(bNode)) {
         return { name: undefined, range: undefined };
       }
+
+      if (isAnExpect(bNode)) {
+        return getNameAndRangeForExpect(bNode);
+      }
+
       const cExp = (<Babylon.CallExpression>(<Babylon.ExpressionStatement>bNode).expression);
       const arg: Babylon.Expression | Babylon.SpreadElement | null = cExp.arguments.length ? cExp.arguments[0] : null;
       const sourceLoc: Babylon.SourceLocation = arg ? arg.loc : cExp.loc;
@@ -158,16 +196,48 @@ type ResultLocation = {
   
       return {
         name: name,
-        range: new vscode.Range(sourceLoc.start.line - 1, sourceLoc.start.column, sourceLoc.end.line - 1, sourceLoc.end.column)
+        range: new vscode.Range(bNode.loc.start.line - 1, bNode.loc.start.column, bNode.loc.end.line - 1, bNode.loc.end.column) ,
+        nameRange: new vscode.Range(sourceLoc.start.line - 1, sourceLoc.start.column, sourceLoc.end.line - 1, sourceLoc.end.column)
       };
     };
   };
+
+  const getNameAndRangeForExpect = (bNode: BabylonNode): NameAndRanges => {
+    const cExp = (<Babylon.CallExpression>(<Babylon.ExpressionStatement>bNode).expression);
+    let name = '';
+    let callee: any = cExp.callee;
+    let sourceLoc: Babylon.SourceLocation | undefined;
+    let args: any[] | undefined = (!!callee && !!callee.arguments && !!callee.arguments.length) ? callee.arguments : undefined;
+    while (callee) {
+
+      if (callee.property && callee.property.name) {
+        name = `${callee.property.name}${name.length ? '.' : ''}${name}`;
+      }
+      if (callee.name) {
+        sourceLoc = callee.loc;
+        let addOn = callee.name;
+        if (args) {
+          let argArry = args.reduce((out, arg) => { if (arg.name) { out.push(arg.name); } else if (arg.value) { out.push(arg.value.toString()); } return out; }, [] as string[]);
+          addOn = `${callee.name}(${argArry.join(', ')})`;
+        }
+        name = `${addOn}${name.length ? '.' : ''}${name}`;
+      }
+
+      args = (!!callee.arguments && !!callee.arguments.length) ? callee.arguments : undefined;
+      callee = callee.callee || callee.object;
+    }
   
-  // Pull out the name of a CallExpression (describe/it)
-  // handle cases where it's a member expression (.only)
-  const getNameForNode = (node: BabylonNode) => {
+    return {
+      name: name,
+      range: new vscode.Range(bNode.loc.start.line - 1, bNode.loc.start.column, bNode.loc.end.line - 1, bNode.loc.end.column) ,
+      nameRange: sourceLoc ? new vscode.Range(sourceLoc.start.line - 1, sourceLoc.start.column, sourceLoc.end.line - 1, sourceLoc.end.column) : DefaultRange
+    };
+
+  };
+
+  const getNodeWithName = (node: BabylonNode): BabylonNode | undefined => {
     if (!isFunctionCall(node)) {
-      return false;
+      return;
     }
     const nodeAsExpressionStatement = <Babylon.ExpressionStatement>node;
     const nodeExpression = nodeAsExpressionStatement ? <Babylon.CallExpression>nodeAsExpressionStatement.expression : undefined;
@@ -181,16 +251,47 @@ type ResultLocation = {
         callee = callee.callee || callee.object;
       }
     }
-    return name;
+
+    return callee;
   };
   
-  const getAddNode = (getNameAndRange: (bNode: BabylonNode) => NameAndRange, file: JestTestFile) => {
+  // Pull out the name of a CallExpression (describe/it/expect)
+  // handle cases where it's a member expression (.only)
+  const getNameForNode = (node: BabylonNode) => {
+    // if (!isFunctionCall(node)) {
+    //   return false;
+    // }
+    // const nodeAsExpressionStatement = <Babylon.ExpressionStatement>node;
+    // const nodeExpression = nodeAsExpressionStatement ? <Babylon.CallExpression>nodeAsExpressionStatement.expression : undefined;
+    // let name = nodeExpression && nodeExpression.callee ? (<any>nodeExpression.callee).name : undefined;
+    // let callee: any = nodeExpression ? nodeExpression.callee : undefined;
+    // while (!name && callee) {
+    //   if (callee.name) {
+    //     name = callee.name;
+    //   }
+    //   else {
+    //     callee = callee.callee || callee.object;
+    //   }
+    // }
+    // return name;
+
+    const nodeWithName: any = getNodeWithName(node);
+    if (!nodeWithName) {
+      return false;
+    }
+    return nodeWithName.name;
+  };
+  
+  const getAddNode = (getNameAndRange: (bNode: BabylonNode) => NameAndRanges, file: JestTestFile) => {
     return (type: TestNodeType, parent: ParseResult, babylonNode: BabylonNode, ): ParseResult => {
       const nameAndRange = getNameAndRange(babylonNode);
   
-      const child = new ParseResult(type, nameAndRange.name);
+      const child = new ParseResult(type, nameAndRange.name, getNameForNode(babylonNode));
       if (nameAndRange.range) {
         child.locations.push({ file: file, start: nameAndRange.range.start, end: nameAndRange.range.end });
+      }
+      if (nameAndRange.nameRange) {
+        child.nameLocations.push({ file: file, start: nameAndRange.nameRange.start, end: nameAndRange.nameRange.end });
       }
   
       if (parent) {
@@ -223,6 +324,8 @@ type ResultLocation = {
           child = addNode('describe', parent, element);
         } else if (isAnIt(element)) {
           child = addNode('it', parent, element);
+        } else if (isAnExpect(element)) {
+          child = addNode('expect', parent, element);
         } else if (element && element.type === 'VariableDeclaration') {
           element.declarations
             .filter(

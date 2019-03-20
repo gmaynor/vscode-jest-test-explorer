@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { IJestDirectory, JestTestFile } from './testDirectories';
-import { ParseResult, discoverTests } from './testDiscovery';
+import { ParseResult, discoverTests, ResultLocation } from './testDiscovery';
 import { TestNodeType, TestNodeTypes, TestStatus, DefaultPosition, DefaultRange } from './utility';
 import { stat } from 'fs';
 
@@ -11,9 +11,9 @@ export type DescribeLocation = {
 };
 
 export interface ITestResult {
-    status: TestStatus;
-    failureMessages?: Array<string>;
-    testNode: ITestNode;
+  status: TestStatus;
+  failureMessages?: Array<string>;
+  testNode: ITestNode;
 }
 
 export interface ITestNode {
@@ -23,11 +23,14 @@ export interface ITestNode {
   fqName: string | undefined;
   parent?: ITestNode;
   children?: Array<ITestNode>;
+  expects?: Array<ITestNode>;
   itBlocks?: ItNode[];
   jestTestFile?: JestTestFile;
   running: boolean;
   testResult?: ITestResult;
   position(filePath: string): vscode.Position;
+  range(filePath: string): vscode.Range;
+  namePosition(filePath: string): vscode.Position;
   nameRange(filePath: string): vscode.Range;
   mergeWith(other: ITestNode): void;
 }
@@ -67,14 +70,16 @@ export interface IFileCoverageResult {
   branchHits: IMap<number[]>;
   fnHits: IMap<number>;
   statementHits: IMap<number>;
+  lineMap: IMap<number>;
   metrics: ICoverageMetrics;
+  uncoveredLines: Array<number>;
 }
 
 export interface ICoverageMap {
   [key: string]: IFileCoverageResult;
 }
 
-const getNewParseResult = (type: TestNodeType, file?: JestTestFile, name?: string): RootNode | DescribeNode | ItNode => {
+const getNewParseResult = (type: TestNodeType, file?: JestTestFile, name?: string): RootNode | DescribeNode | ItNode | ExpectNode => {
   switch (type) {
     case 'root':
       return new RootNode();
@@ -85,62 +90,67 @@ const getNewParseResult = (type: TestNodeType, file?: JestTestFile, name?: strin
         throw Error('Can\'t construct a new ItNode without a JestTestFile.');
       }
       return new ItNode(file, name);
+    case 'expect':
+      if (!file) {
+        throw Error('Can\'t construct a new ExpectNode without a JestTestFile.');
+      }
+      return new ExpectNode(file, name);
     default:
       throw Error(`Unexpected type '${type}'`);
   }
 };
 
 class TestResult implements ITestResult {
-    failureMessages?: Array<string>;
+  failureMessages?: Array<string>;
 
-    constructor(public testNode: ITestNode, public status: TestStatus, failMessages?: string[]) {
-        this.failureMessages = failMessages;
-    }
+  constructor(public testNode: ITestNode, public status: TestStatus, failMessages?: string[]) {
+    this.failureMessages = failMessages;
+  }
 }
 
 class ContainerTestResult implements ITestResult {
 
-    constructor(public testNode: ITestNode) {
+  constructor(public testNode: ITestNode) {
 
+  }
+
+  public get status(): TestStatus {
+    const children: ITestNode[] = this.testNode.children || [];
+    if (!children.length) {
+      return 'pending';
     }
 
-    public get status(): TestStatus {
-        const children: ITestNode[] = this.testNode.children || [];
-        if (!children.length) {
-            return 'pending';
-        }
-
-        if (children.some((child: ITestNode) => child.testResult ? child.testResult.status === 'failed' : false)) {
-            return 'failed';
-        }
-        const statii: Array<TestStatus> = [ 'passed', 'skipped', 'todo' ];
-        let retVal: TestStatus | undefined;
-        for (let i = 0; i < statii.length && !retVal; i++) {
-            const s = statii[i];
-            if (children.every((child: ITestNode) => child.testResult ? child.testResult.status === s : false)) {
-                retVal = s;
-            }
-        }
-
-        return retVal || 'pending';
+    if (children.some((child: ITestNode) => child.testResult ? child.testResult.status === 'failed' : false)) {
+      return 'failed';
+    }
+    const statii: Array<TestStatus> = ['passed', 'skipped', 'todo'];
+    let retVal: TestStatus | undefined;
+    for (let i = 0; i < statii.length && !retVal; i++) {
+      const s = statii[i];
+      if (children.every((child: ITestNode) => child.testResult ? child.testResult.status === s : false)) {
+        retVal = s;
+      }
     }
 
-    public get failureMessages(): Array<string> | undefined {
-        if (!this.testNode.children || !this.testNode.children.length) {
-            return;
-        }
+    return retVal || 'pending';
+  }
 
-        const retVal: string[] = [];
-        this.testNode.children.forEach(child => {
-            const childMessages: Array<string> | undefined = child.testResult ? child.testResult.failureMessages : undefined;
-            if (childMessages && childMessages.length) {
-                retVal.push(childMessages.join('\n'));
-            }
-        });
-        if (retVal.length) {
-            return retVal;
-        }
+  public get failureMessages(): Array<string> | undefined {
+    if (!this.testNode.children || !this.testNode.children.length) {
+      return;
     }
+
+    const retVal: string[] = [];
+    this.testNode.children.forEach(child => {
+      const childMessages: Array<string> | undefined = child.testResult ? child.testResult.failureMessages : undefined;
+      if (childMessages && childMessages.length) {
+        retVal.push(childMessages.join('\n'));
+      }
+    });
+    if (retVal.length) {
+      return retVal;
+    }
+  }
 }
 
 class TestNode implements ITestNode {
@@ -150,9 +160,12 @@ class TestNode implements ITestNode {
   isContainer: boolean;
   start: vscode.Position = DefaultPosition;
   end: vscode.Position = DefaultPosition;
+  nameStart: vscode.Position = DefaultPosition;
+  nameEnd: vscode.Position = DefaultPosition;
   running: boolean = false;
   parent?: ITestNode;
   children?: Array<ITestNode>;
+  expects?: Array<ITestNode>;
   itBlocks?: ItNode[];
   private _testResult?: ITestResult;
 
@@ -186,6 +199,16 @@ class TestNode implements ITestNode {
     return this.file;
   }
 
+  public set location(value: ResultLocation) {
+    this.start = value.start;
+    this.end = value.end;
+  }
+
+  public set nameLocation(value: ResultLocation) {
+    this.nameStart = value.start;
+    this.nameEnd = value.end;
+  }
+
   public position(filePath: string): vscode.Position {
     if (!this.file || this.file.path !== filePath) {
       return DefaultPosition;
@@ -194,10 +217,24 @@ class TestNode implements ITestNode {
     return this.start;
   }
 
-  public nameRange(filePath: string): vscode.Range {
-    const position = this.position(filePath);
+  public range(filePath: string): vscode.Range {
+    const pos = this.position(filePath);
 
-    return position === DefaultPosition ? DefaultRange : new vscode.Range(position, position.translate(0, this.name ? this.name.length : 0));
+    return pos === DefaultPosition ? DefaultRange : new vscode.Range(pos, this.end);
+  }
+
+  public namePosition(filePath: string): vscode.Position {
+    if (!this.file || this.file.path !== filePath) {
+      return DefaultPosition;
+    }
+
+    return this.nameStart;
+  }
+
+  public nameRange(filePath: string): vscode.Range {
+    const pos = this.namePosition(filePath);
+
+    return pos === DefaultPosition ? DefaultRange : new vscode.Range(pos, this.nameEnd);
   }
 
   public mergeWith(other: ITestNode): void {
@@ -232,11 +269,11 @@ class TestNode implements ITestNode {
   }
 
   public get testResult() {
-      return this._testResult;
+    return this._testResult;
   }
 
   public set testResult(value: ITestResult | undefined) {
-      this._testResult = value;
+    this._testResult = value;
   }
 
   protected addChildNode(node: ITestNode): void {
@@ -254,6 +291,11 @@ class TestNode implements ITestNode {
         break;
       case TestNodeTypes.it:
         this.addItBlock(node as ItNode);
+        break;
+      case TestNodeTypes.expect:
+        this.addExpectBlock(node);
+        node.parent = this;
+        addToChildren = false;
         break;
       default:
         throw TypeError(`unexpected child node type: ${node.type}`);
@@ -277,6 +319,12 @@ class TestNode implements ITestNode {
       (this.parent as TestNode).addItBlock(node);
     }
   }
+  protected addExpectBlock(node: ITestNode) {
+    if (!this.expects) {
+      this.expects = [];
+    }
+    this.expects.push(node);
+  }
 }
 
 class RootNode extends TestNode {
@@ -287,6 +335,7 @@ class RootNode extends TestNode {
 
 class DescribeNode extends TestNode {
   protected _foundIn: DescribeLocation[] = [];
+  protected _nameFoundIn: DescribeLocation[] = [];
   constructor(name?: string) {
     super('describe', undefined, name);
   }
@@ -295,26 +344,34 @@ class DescribeNode extends TestNode {
     return this._foundIn.slice();
   }
 
+  public get nameFoundIn(): DescribeLocation[] {
+    return this._nameFoundIn.slice();
+  }
+
   public addFoundIn(value: DescribeLocation): void {
     this._foundIn.push(value);
+  }
+
+  public addNameFoundIn(value: DescribeLocation): void {
+    this._nameFoundIn.push(value);
   }
 
   public mergeWith(other: ITestNode): void {
     super.mergeWith(other);
     if (other.type === this.type) {
-      const alsoFound = (<DescribeNode>other).foundIn;
-      alsoFound.forEach(af => {
-        let thisFound = this.foundIn.filter(x => x.file === af.file);
-        if (!thisFound || !thisFound.length) {
-          this.foundIn.push(af);
-        }
-        else {
-          thisFound = thisFound.filter(x => x.start.isEqual(af.start));
-        }
-        if (!thisFound || thisFound.length === 0) {
-          this.foundIn.push(af);
-        }
-      });
+      const mergeDescribeLocations = (thisLocations: DescribeLocation[], otherLocations: DescribeLocation[]) => {
+        otherLocations.forEach(ol => {
+          let tl = thisLocations.filter(x => x.file === ol.file);
+          if (tl && tl.length) {
+            tl = tl.filter(x => x.start.isEqual(ol.start));
+          }
+          if (!tl || !tl.length) {
+            thisLocations.push(ol);
+          }
+        });
+      };
+      mergeDescribeLocations(this.foundIn, (other as DescribeNode).foundIn);
+      mergeDescribeLocations(this.nameFoundIn, (other as DescribeNode).nameFoundIn);
     }
   }
 
@@ -326,11 +383,44 @@ class DescribeNode extends TestNode {
 
     return foundIn.start;
   }
+
+  public range(filePath: string): vscode.Range {
+    const foundIn = this._foundIn.find(fi => fi.file.path === filePath);
+    if (!foundIn) {
+      return DefaultRange;
+    }
+
+    return new vscode.Range(foundIn.start, foundIn.end);
+  }
+
+  public namePosition(filePath: string): vscode.Position {
+    const foundIn = this._nameFoundIn.find(fi => fi.file.path === filePath);
+    if (!foundIn) {
+      return DefaultPosition;
+    }
+
+    return foundIn.start;
+  }
+
+  public nameRange(filePath: string): vscode.Range {
+    const foundIn = this._nameFoundIn.find(fi => fi.file.path === filePath);
+    if (!foundIn) {
+      return DefaultRange;
+    }
+
+    return new vscode.Range(foundIn.start, foundIn.end);
+  }
 }
 
 class ItNode extends TestNode {
   constructor(file: JestTestFile, name?: string) {
     super('it', file, name);
+  }
+}
+
+class ExpectNode extends TestNode {
+  constructor(file: JestTestFile, name?: string) {
+    super('expect', file, name);
   }
 }
 
@@ -342,10 +432,11 @@ class FileCoverageResult implements IFileCoverageResult {
   public readonly fnHits: IMap<number> = {};
   public readonly statementHits: IMap<number> = {};
   public readonly metrics: ICoverageMetrics = {};
+  public readonly lineMap: IMap<number> = {};
   private readonly _path: string;
 
   public static locToRange(loc: ICoverageLoc): vscode.Range {
-    const posInvalid = (pos: { line: number | null, column: number | null}): boolean => {
+    const posInvalid = (pos: { line: number | null, column: number | null }): boolean => {
       if (pos.line === null || pos.line < 0) {
         return true;
       }
@@ -378,7 +469,7 @@ class FileCoverageResult implements IFileCoverageResult {
       this.statementMap[key] = FileCoverageResult.locToRange(tmp);
     });
     Object.keys(jsonNode.b).map(key => parseInt(key)).forEach(key => {
-      this.branchHits[key] = [ ...jsonNode.b[key] ];
+      this.branchHits[key] = [...jsonNode.b[key]];
     });
     Object.keys(jsonNode.f).map(key => parseInt(key)).forEach(key => {
       this.fnHits[key] = jsonNode.f[key];
@@ -386,12 +477,34 @@ class FileCoverageResult implements IFileCoverageResult {
     Object.keys(jsonNode.s).map(key => parseInt(key)).forEach(key => {
       this.statementHits[key] = jsonNode.s[key];
     });
+    Object.keys(this.statementHits).map(key => parseInt(key)).forEach(key => {
+      const statement = this.statementMap[key];
+      if (!statement) {
+        return;
+      }
+      const line = statement.start.line;
+      const count = this.statementHits[key];
+      const prevVal = this.lineMap[line];
+      if (prevVal === undefined || prevVal < count) {
+        this.lineMap[line] = count;
+      }
+    });
 
     this.calculateMetrics();
   }
 
   public get path(): string {
     return this._path;
+  }
+
+  public get uncoveredLines(): Array<number> {
+    const ret: Array<number> = [];
+    Object.keys(this.lineMap).map(key => parseInt(key)).forEach(key => {
+      if (this.lineMap[key] === 0) {
+        ret.push(key);
+      }
+    });
+    return ret;
   }
 
   private calculateMetrics() {
@@ -409,10 +522,13 @@ class FileCoverageResult implements IFileCoverageResult {
     const fnHits = Object.keys(this.fnHits).reduce((count: number, key: string) => { count += getHits(key, this.fnHits); return count; }, 0);
     const branches = Object.keys(this.branchMap).reduce((count, key) => { const keyNum = parseInt(key); count += this.branchMap[keyNum].locations.length; return count; }, 0);
     const branchHits = Object.keys(this.branchHits).reduce((count: number, key: string) => { count += getHits(key, this.branchHits); return count; }, 0);
+    const lines = Object.keys(this.lineMap).length;
+    const lineHits = Object.keys(this.lineMap).map(key => parseInt(key)).reduce((count, key) => { if (this.lineMap[key] > 0) { count += 1; } return count; }, 0);
 
-    this.metrics['statements'] = { name: 'statement coverage', instanceCount: statements, hitCount: statementHits, percentage: statementHits / statements };
-    this.metrics['functions'] = { name: 'function coverage', instanceCount: fns, hitCount: fnHits, percentage: fnHits / fns };
-    this.metrics['branches'] = { name: 'branch coverage', instanceCount: branches, hitCount: branchHits, percentage: branchHits / branches };
+    this.metrics['statements'] = { name: 'statements', instanceCount: statements, hitCount: statementHits, percentage: statementHits / statements };
+    this.metrics['functions'] = { name: 'functions', instanceCount: fns, hitCount: fnHits, percentage: fnHits / fns };
+    this.metrics['branches'] = { name: 'branches', instanceCount: branches, hitCount: branchHits, percentage: branchHits / branches };
+    this.metrics['lines'] = { name: 'lines', instanceCount: lines, hitCount: lineHits, percentage: lineHits / lines };
   }
 }
 
@@ -420,8 +536,8 @@ class FileCoverageResult implements IFileCoverageResult {
 let _rootNode: RootNode;
 let _coverageMap: ICoverageMap;
 
-export const getRootNode = ():ITestNode | undefined => {
-    return _rootNode;
+export const getRootNode = (): ITestNode | undefined => {
+  return _rootNode;
 };
 
 export const getCoverageMap = (): ICoverageMap | undefined => {
@@ -430,68 +546,78 @@ export const getCoverageMap = (): ICoverageMap | undefined => {
 
 
 export const loadTests = async (jestDirs: IJestDirectory[]): Promise<ITestNode> => {
-    const pResults: ParseResult[] = [];
-    for (let jestDir of jestDirs) {
-        pResults.push(await discoverTests(jestDir));
+  const pResults: ParseResult[] = [];
+  for (let jestDir of jestDirs) {
+    pResults.push(await discoverTests(jestDir));
+  }
+
+  _rootNode = new RootNode();
+
+  const addChildNode = (pResult: ParseResult, parent: ITestNode) => {
+    const child = (parent as TestNode).addChild(pResult.type, pResult.name, pResult.locations.length === 1 ? pResult.locations[0].file : undefined);
+    if (child.type === TestNodeTypes.describe) {
+      const dNode = child as DescribeNode;
+      pResult.locations.forEach(loc => {
+        dNode.addFoundIn(loc);
+      });
+      pResult.nameLocations.forEach(loc => {
+        dNode.addNameFoundIn(loc);
+      });
+    }
+    else if (child.type !== TestNodeTypes.root) {
+      const tNode = child as TestNode;
+      if (pResult.locations.length === 1) {
+        tNode.location = pResult.locations[0];
+      }
+      if (pResult.nameLocations.length === 1) {
+        tNode.nameLocation = pResult.locations[0];
+      }
+    }
+    if (pResult.children) {
+      pResult.children.forEach(x => addChildNode(x, child));
+    }
+    if (pResult.expects) {
+      pResult.expects.forEach(x => addChildNode(x, child));
+    }
+  };
+
+  pResults.forEach(pResult => {
+    const pRoot = new RootNode();
+    if (pResult.children) {
+      pResult.children.forEach(child => { addChildNode(child, pRoot); });
     }
 
-    _rootNode = new RootNode();
+    _rootNode.mergeWith(pRoot);
+  });
 
-    const addChildNode = (pResult: ParseResult, parent: ITestNode) => {
-        const child = (parent as TestNode).addChild(pResult.type, pResult.name, pResult.locations.length === 1 ? pResult.locations[0].file : undefined);
-        if (child.type === TestNodeTypes.describe) {
-            const dNode = child as DescribeNode;
-            pResult.locations.forEach(loc => {
-                dNode.addFoundIn(loc);
-            });
-        }
-        else if (child.type === TestNodeTypes.it && pResult.locations.length === 1) {
-            const iNode = child as ItNode;
-            iNode.start = pResult.locations[0].start;
-            iNode.end = pResult.locations[0].end;
-        }
-        if (pResult.children) {
-            pResult.children.forEach(x => addChildNode(x, child));
-        }
-    };
-
-    pResults.forEach(pResult => {
-        const pRoot = new RootNode();
-        if (pResult.children) {
-            pResult.children.forEach(child => { addChildNode(child, pRoot); });
-        }
-
-        _rootNode.mergeWith(pRoot);
-    });
-
-    return _rootNode;
+  return _rootNode;
 };
 
 
 export const parseTestResults = (stdout: string): void => {
-    const rawResult = JSON.parse(stdout);
+  const rawResult = JSON.parse(stdout);
 
-    const its = _rootNode ? _rootNode.itBlocks : undefined;
+  const its = _rootNode ? _rootNode.itBlocks : undefined;
 
-    if (!its) {
-        return;        
-    }
+  if (!its) {
+    return;
+  }
 
-    rawResult.testResults.forEach((x: any) => {
-        x.assertionResults.forEach((a: any) => {
-            const aFQ = a.ancestorTitles.join(':');
-            const fqName = `${(aFQ && aFQ.length) ? aFQ + ':' : ''}${a.title}`;
-            const node = its.find(n => n.fqName === fqName);
-            if (node && (!node.testResult || a.status !== 'pending')) {
-                node.testResult = new TestResult(node, a.status, a.failureMessages);
-                let parent = node.parent;
-                while (parent && !parent.testResult) {
-                    parent.testResult = new ContainerTestResult(parent);
-                    parent = parent.parent;
-                }
-            }
-        });
+  rawResult.testResults.forEach((x: any) => {
+    x.assertionResults.forEach((a: any) => {
+      const aFQ = a.ancestorTitles.join(':');
+      const fqName = `${(aFQ && aFQ.length) ? aFQ + ':' : ''}${a.title}`;
+      const node = its.find(n => n.fqName === fqName);
+      if (node && (!node.testResult || a.status !== 'pending')) {
+        node.testResult = new TestResult(node, a.status, a.failureMessages);
+        let parent = node.parent;
+        while (parent && !parent.testResult) {
+          parent.testResult = new ContainerTestResult(parent);
+          parent = parent.parent;
+        }
+      }
     });
+  });
 
-    _coverageMap = Object.keys(rawResult.coverageMap).reduce((out, key) => { out[key] = new FileCoverageResult(rawResult.coverageMap[key]); return out; }, {} as ICoverageMap);
+  _coverageMap = Object.keys(rawResult.coverageMap).reduce((out, key) => { out[key] = new FileCoverageResult(rawResult.coverageMap[key]); return out; }, {} as ICoverageMap);
 };
