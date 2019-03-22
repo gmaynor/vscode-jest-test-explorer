@@ -3,12 +3,10 @@ import { TestCommands } from './testCommands';
 import { getCoverageMap, ICoverageMap } from './nodes';
 
 export function registerCoverageCodeLens(commands: TestCommands) {
-  return [
-    vscode.languages.registerCodeLensProvider(
+  return vscode.languages.registerCodeLensProvider(
       { pattern: '**/*.{ts,tsx,js,jsx}', scheme: 'file' },
       new CoverageCodeLensProvider(commands)
-    ),
-  ];
+    );
 }
 
 class CoverageCodeLensProvider implements vscode.CodeLensProvider {

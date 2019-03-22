@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ITestNode, ITestResult } from './nodes';
-import { Utility } from "./utility";
+import { Config } from "./utility";
 import { TestCommands } from "./testCommands";
 
 export class Problems {
@@ -47,7 +47,7 @@ export class Problems {
     private _diagnosticCollection: vscode.DiagnosticCollection | null = null;
 
     constructor(testCommands: TestCommands) {
-        if (Utility.getConfiguration().get<boolean>("addProblems")) {
+        if (Config.addProblemsEnabled) {
             testCommands.onTestResultsUpdated(this.addTestResults, this);
             this._diagnosticCollection = vscode.languages.createDiagnosticCollection("jest-test-explorer");
             testCommands.onTestDiscoveryFinished(() => this._diagnosticCollection && this._diagnosticCollection.clear());

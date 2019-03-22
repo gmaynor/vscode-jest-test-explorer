@@ -81,8 +81,20 @@
 				}
 			},
 			{
+				"command": "jest-test-explorer.debugTest",
+				"title": "Debug Test",
+				"icon": {
+					"light": "resources/light/debug.svg",
+					"dark": "resources/dark/debug.svg"
+				}
+			},
+			{
 				"command": "jest-test-explorer.runTestInContext",
 				"title": "Run Jest Test in context"
+			},
+			{
+				"command": "jest-test-explorer.debugTestInContext",
+				"title": "Debug Jest Test in context"
 			},
 			{
 				"command": "jest-test-explorer.gotoTest",
@@ -125,7 +137,12 @@
 				{
 					"command": "jest-test-explorer.runTest",
 					"when": "view == jestTestExplorer",
-					"group": "inline"
+					"group": "inline@0"
+				},
+				{
+					"command": "jest-test-explorer.debugTest",
+					"when": "viewItem == test",
+					"group": "inline@1"
 				},
 				{
 					"command": "jest-test-explorer.gotoTest",
@@ -143,6 +160,16 @@
 					"command": "jest-test-explorer.runTestInContext",
 					"group": "jestTestExplorer@0",
 					"when": "resourceLangId == typescript"
+				},
+				{
+					"command": "jest-test-explorer.debugTestInContext",
+					"group": "jestTestExplorer@1",
+					"when": "resourceLangId == javascript"
+				},
+				{
+					"command": "jest-test-explorer.debugTestInContext",
+					"group": "jestTestExplorer@1",
+					"when": "resourceLangId == typescript"
 				}
 			]
 		},
@@ -153,27 +180,17 @@
 				"jest-test-explorer.useTreeView": {
 					"type": "boolean",
 					"default": true,
-					"description": "If false, will list all tests as the full namespace. When set to true a tree will be created based on the namespaces of the tests."
+					"description": "If false, will list all tests as the full namespace. When set to true a tree will be created based on the namespaces (describes) of the tests."
 				},
 				"jest-test-explorer.showCodeLens": {
 					"type": "boolean",
 					"default": true,
-					"description": "Determines whether to show the CodeLens test status or not."
+					"description": "Determines whether or not to show the 'run test(s)' and 'debug test' CodeLens."
 				},
-				"jest-test-explorer.codeLensFailed": {
-					"type": "string",
-					"default": "",
-					"description": "The text to display in the code lens when a test has failed."
-				},
-				"jest-test-explorer.codeLensPassed": {
-					"type": "string",
-					"default": "",
-					"description": "The text to display in the code lens when a test has passed."
-				},
-				"jest-test-explorer.codeLensSkipped": {
-					"type": "string",
-					"default": "",
-					"description": "The text to display in the code lens when a test has been skipped."
+				"jest-test-explorer.showStatusDecorations": {
+					"type": "boolean",
+					"default": true,
+					"description": "Determines whether or not to show test status decorations in the editor."
 				},
 				"jest-test-explorer.pathForResultFile": {
 					"type": "string",
@@ -199,6 +216,26 @@
 					"type": "string",
 					"default": "",
 					"description": "Additional arguments that are added to the jest command."
+				},
+				"jest-test-explorer.decorationFailed": {
+					"type": "string",
+					"default": "",
+					"description": "The text to display in the status decoration when a test has failed."
+				},
+				"jest-test-explorer.decorationPassed": {
+					"type": "string",
+					"default": "",
+					"description": "The text to display in the status decoration when a test has passed."
+				},
+				"jest-test-explorer.decorationSkipped": {
+					"type": "string",
+					"default": "",
+					"description": "The text to display in the status decoration when a test has been skipped."
+				},
+				"jest-test-explorer.decorationNotRun": {
+					"type": "string",
+					"default": "",
+					"description": "The text to display in the status decoration when a test has not been run."
 				}
 			}
 		}

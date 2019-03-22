@@ -1,8 +1,8 @@
-"use strict";
+import * as vscode from 'vscode';
 import { CancellationToken, CodeLens, CodeLensProvider, Disposable, Event, EventEmitter, TextDocument, Range, Command } from "vscode";
 import { TestCommands } from "./testCommands";
 import { getRootNode, ITestNode } from './nodes';
-import { Utility, DefaultPosition } from "./utility";
+import { Config, DefaultPosition } from "./utility";
 
 class RunTestCodeLens extends CodeLens {
 
@@ -34,7 +34,7 @@ class DebugTestCodeLens extends CodeLens {
 
         const cmd: Command = {
             title: 'debug test',
-            command: "jest-test-explorer.debugTest",
+            command: "jest-test-explorer.debugTestInContext",
             tooltip: 'Debugs the specified test',
             arguments: [testNode]
         };
@@ -43,7 +43,14 @@ class DebugTestCodeLens extends CodeLens {
     }
 }
 
-export class TestCodeLensProvider implements CodeLensProvider {
+export function registerTestCodeLens(commands: TestCommands) {
+    return vscode.languages.registerCodeLensProvider(
+        { pattern: '**/*.{ts,tsx,js,jsx}', scheme: 'file' },
+        new TestCodeLensProvider(commands)
+      );
+  }
+  
+class TestCodeLensProvider implements CodeLensProvider {
     private disposables: Disposable[] = [];
     private onDidChangeCodeLensesEmitter = new EventEmitter<void>();
 
@@ -66,7 +73,7 @@ export class TestCodeLensProvider implements CodeLensProvider {
     }
 
     public provideCodeLenses(document: TextDocument, token: CancellationToken): CodeLens[] | Thenable<CodeLens[]> {
-        if (!Utility.codeLensEnabled) {
+        if (!Config.codeLensEnabled) {
             return [];
         }
         const rootNode = getRootNode();

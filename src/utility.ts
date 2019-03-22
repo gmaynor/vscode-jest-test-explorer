@@ -28,38 +28,74 @@ export const TestNodeTypes = {
 
 export type TestStatus = 'pending' | 'passed' | 'failed' | 'skipped' | 'todo';
 
-export class Utility {
+export class Config {
+    private static useTreeView: boolean;
+    private static autoExpandTree: boolean;
+    private static showCodeLens: boolean;
+    private static showStatusDecorations: boolean;
+    private static collectCoverage: boolean;
+    private static showCoverage: boolean;
+    private static addProblems: boolean;
+    private static failed: string;
+    private static passed: string;
+    private static skipped: string;
+    private static notRun: string;
+
+    public static get useTreeViewEnabled(): boolean {
+        return Config.useTreeView;
+    }
+
+    public static get autoExpandEnabled(): boolean {
+        return Config.autoExpandTree;
+    }
+
     public static get codeLensEnabled(): boolean {
-        return Utility.showCodeLens;
+        return Config.showCodeLens;
     }
 
-    public static get codeLensFailed(): string {
-        return Utility.failed;
+    public static get statusDecorationsEnabled(): boolean {
+        return Config.showStatusDecorations;
     }
 
-    public static get codeLensPassed(): string {
-        return Utility.passed;
+    public static get addProblemsEnabled(): boolean {
+        return Config.addProblems;
     }
 
-    public static get codeLensSkipped(): string {
-        return Utility.skipped;
+    public static get collectCoverageEnabled(): boolean {
+        return Config.collectCoverage;
     }
 
-    public static get codeLensNotRun(): string {
-        return Utility.notRun;
+    public static get showCoverageEnabled(): boolean {
+        return Config.collectCoverage && Config.showCoverage;
+    }
+
+    public static get decorationFailed(): string {
+        return Config.failed;
+    }
+
+    public static get decorationPassed(): string {
+        return Config.passed;
+    }
+
+    public static get decorationSkipped(): string {
+        return Config.skipped;
+    }
+
+    public static get decorationNotRun(): string {
+        return Config.notRun;
     }
 
     public static get defaultCollapsibleState(): vscode.TreeItemCollapsibleState {
-        return Utility.autoExpandTree ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed;
+        return Config.autoExpandTree ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed;
     }
 
     public static get pathForResultFile(): string {
-        const pathForResultFile = Utility.getConfiguration().get<string>("pathForResultFile");
-        return pathForResultFile ? this.resolvePath(pathForResultFile) : tmpdir();
+        const pathForResultFile = Config.getConfiguration().get<string>("pathForResultFile");
+        return pathForResultFile ? Utility.resolvePath(pathForResultFile) : tmpdir();
     }
 
     public static get additionalArgumentsOption(): string {
-        const testArguments = Utility.getConfiguration().get<string>("testArguments");
+        const testArguments = Config.getConfiguration().get<string>("testArguments");
         return (testArguments && testArguments.length > 0) ? ` ${testArguments}` : "";
     }
 
@@ -68,17 +104,33 @@ export class Utility {
     }
 
     public static updateCache() {
-        const configuration = Utility.getConfiguration();
+        const configuration = Config.getConfiguration();
         const osx = platform() === "darwin";
 
-        Utility.showCodeLens = configuration.get<boolean>("showCodeLens", true);
-        // Utility.failed = Utility.getLensText(configuration, "codeLensFailed", "\u274c"); // Cross Mark
-        Utility.failed = Utility.getLensText(configuration, "codeLensFailed", "\u2715"); // Multiplication Sign
-        Utility.passed = Utility.getLensText(configuration, "codeLensPassed", osx ? "\u2705" : "\u2714"); // White Heavy Check Mark / Heavy Check Mark
-        Utility.skipped = Utility.getLensText(configuration, "codeLensSkipped", "\u26a0"); // Warning
-        Utility.notRun = Utility.getLensText(configuration, "codeLensNotRun", "\u25cb"); // Open Circle
-        Utility.autoExpandTree = configuration.get<boolean>("autoExpandTree", false);
+        Config.useTreeView = configuration.get<boolean>("useTreeView", true);
+        Config.showCodeLens = configuration.get<boolean>("showCodeLens", true);
+        Config.showStatusDecorations = configuration.get<boolean>("showStatusDecorations", true);
+        Config.addProblems = configuration.get<boolean>("addProblems", true);
+        Config.collectCoverage = configuration.get<boolean>("collectCoverage", false);
+        Config.showCoverage = configuration.get<boolean>("showCoverage", false);
+        Config.failed = Config.getDecorationText(configuration, "decorationFailed", "\u2715"); // Multiplication Sign
+        Config.passed = Config.getDecorationText(configuration, "decorationPassed", osx ? "\u2705" : "\u2714"); // White Heavy Check Mark / Heavy Check Mark
+        Config.skipped = Config.getDecorationText(configuration, "decorationSkipped", "\u26a0"); // Warning
+        Config.notRun = Config.getDecorationText(configuration, "decorationNotRun", "\u25cb"); // Open Circle
+        Config.autoExpandTree = configuration.get<boolean>("autoExpandTree", false);
     }
+
+    private static getDecorationText(configuration: vscode.WorkspaceConfiguration, name: string, fallback: string): string {
+        // This is an invisible character that indicates the previous character
+        // should be displayed as an emoji, which in our case adds some colour
+        const emojiVariation = "\ufe0f";
+
+        const setting = configuration.get<string>(name);
+        return setting ? setting : (fallback + emojiVariation);
+    }
+}
+
+export class Utility {
 
     /** 
     Returns a Promise which resolves to an array of normalized, fully resolved paths
@@ -160,28 +212,13 @@ export class Utility {
      * @param dir
      * The directory specified in the options.
      */
-    public static resolvePath(dir: string): string {
+    public static resolvePath(dir: string, wsFolder?: vscode.WorkspaceFolder): string {
         if (path.isAbsolute(dir)) {
             return dir;
         }
-        const wsf = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri.fsPath : "";
+        const folder = wsFolder ? wsFolder : vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0] : undefined;
+        const wsf = folder ? folder.uri.fsPath : '';
         return path.resolve(wsf, dir);
-    }
-
-    private static autoExpandTree: boolean;
-    private static showCodeLens: boolean;
-    private static failed: string;
-    private static passed: string;
-    private static skipped: string;
-    private static notRun: string;
-
-    private static getLensText(configuration: vscode.WorkspaceConfiguration, name: string, fallback: string): string {
-        // This is an invisible character that indicates the previous character
-        // should be displayed as an emoji, which in our case adds some colour
-        const emojiVariation = "\ufe0f";
-
-        const setting = configuration.get<string>(name);
-        return setting ? setting : (fallback + emojiVariation);
     }
 }
 

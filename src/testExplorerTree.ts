@@ -1,10 +1,10 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { TreeDataProvider, TreeItem } from 'vscode';
-import Logger from './logger';
+import { DisposableManager } from './disposableManager';
 import { TestCommands } from './testCommands';
 import { ITestNode } from './nodes';
-import { Utility, TestNodeType, DefaultPosition, DefaultRange } from './utility';
+import { Config, TestNodeType, DefaultPosition, DefaultRange } from './utility';
 
 class ArtificialTestNode implements ITestNode {
     public name: string;
@@ -46,17 +46,18 @@ class LoadingNode extends ArtificialTestNode {
 }
 
 export class JestTestExplorerTreeDataProvider implements TreeDataProvider<ITestNode> {
+    private _disposables: DisposableManager = new DisposableManager();
     private _discovering: boolean = false;
     private _rootNode?: ITestNode;
     private _onDidChangeTreeData: vscode.EventEmitter<any> = new vscode.EventEmitter<any>();
     public readonly onDidChangeTreeData: vscode.Event<any> = this._onDidChangeTreeData.event;
 
-    constructor(private context: vscode.ExtensionContext, private testCommands: TestCommands) {
-        testCommands.onTestDiscoveryStarted(this.updateWithDiscoveringTests, this);
-        testCommands.onTestDiscoveryFinished(this.updateWithDiscoveredTests, this);
-        testCommands.onTestRun(this.updateTreeWithRunningTests, this);
-        testCommands.onTestStop(this.updateTreeWithStoppedTests, this);
-        testCommands.onTestResultsUpdated(this.updateTreeWithStoppedTests, this);
+    constructor(private context: vscode.ExtensionContext, testCommands: TestCommands) {
+        this._disposables.addDisposble("disoveringTests", testCommands.onTestDiscoveryStarted(this.updateWithDiscoveringTests, this));
+        this._disposables.addDisposble("discoveredTests", testCommands.onTestDiscoveryFinished(this.updateWithDiscoveredTests, this));
+        this._disposables.addDisposble("testRun", testCommands.onTestRun(this.updateTreeWithRunningTests, this));
+        this._disposables.addDisposble("testStop", testCommands.onTestStop(this.updateTreeWithStoppedTests, this));
+        this._disposables.addDisposble("testResults", testCommands.onTestResultsUpdated(this.updateTreeWithStoppedTests, this));
     }
 
     public getTreeItem(element: ITestNode): TreeItem {
@@ -70,11 +71,11 @@ export class JestTestExplorerTreeDataProvider implements TreeDataProvider<ITestN
             };
         }
 
-        const useTreeView = Utility.getConfiguration().get<string>("useTreeView");
+        const useTreeView = Config.useTreeViewEnabled;
         return {
             label: useTreeView ? element.name : element.fqName,
             iconPath: this.getIcon(element),
-            collapsibleState: element.isContainer ? Utility.defaultCollapsibleState : void 0,
+            collapsibleState: element.isContainer ? Config.defaultCollapsibleState : void 0,
             contextValue: element.isContainer ? 'folder' : 'test',
             command: element.isContainer ? undefined : {
                 command: "jest-test-explorer.gotoTest",
@@ -86,8 +87,22 @@ export class JestTestExplorerTreeDataProvider implements TreeDataProvider<ITestN
 
     public getChildren(element?: ITestNode): ITestNode[] | Thenable<ITestNode[]> {
 
+        const sortChildren = (children: ITestNode[]): ITestNode[] => {
+            return children.sort((a, b) => {
+                if (a.isContainer && !b.isContainer) { return -1; }
+                if (!a.isContainer && b.isContainer) { return 1; }
+                if (a.isContainer && b.isContainer) {
+                    const aName = a.name || '';
+                    const bName = b.name || '';
+                    if (aName < bName) { return -1; }
+                    if (aName > bName) { return 1; }
+                }
+                return 0;
+            });
+        };
+
         if (element) {
-            return element.children || [];
+            return sortChildren(element.children || []);
         }
 
         if (this._discovering) {
@@ -100,13 +115,13 @@ export class JestTestExplorerTreeDataProvider implements TreeDataProvider<ITestN
             });
         }
 
-        const useTreeView = Utility.getConfiguration().get<string>("useTreeView");
+        const useTreeView = Config.useTreeViewEnabled;
 
         if (!useTreeView) {
             return this._rootNode.itBlocks || [];
         }
 
-        return this._rootNode.children || [];
+        return sortChildren(this._rootNode.children || []);
     }
 
     public getParent(element?: ITestNode): ITestNode | undefined {
@@ -117,6 +132,14 @@ export class JestTestExplorerTreeDataProvider implements TreeDataProvider<ITestN
             return;
         }
         return element.parent;
+    }
+
+    public refresh() {
+        this._onDidChangeTreeData.fire();
+    }
+
+    public dispose() {
+        this._disposables.dispose();
     }
 
     private updateWithDiscoveringTests(): void {

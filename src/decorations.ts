@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
-import { Utility } from './utility';
+import { Config } from './utility';
 import { TestCommands } from './testCommands';
 import { ITestNode } from './nodes';
 
 
-export class EditorDecorations {
+export class TestStatusEditorDecorations {
     private readonly _failedTestDecoration: vscode.TextEditorDecorationType;
     private readonly _passedTestDecoration: vscode.TextEditorDecorationType;
     private readonly _skippedTestDecoration: vscode.TextEditorDecorationType;
@@ -14,10 +14,10 @@ export class EditorDecorations {
     private _timeout: NodeJS.Timer | undefined = undefined;
 
     public constructor(private testCommands: TestCommands) {
-        this._failedTestDecoration = this.createTestStatusDecorationType(Utility.codeLensFailed, 'red', '#FF5648', '#AD322D');
-        this._passedTestDecoration = this.createTestStatusDecorationType(Utility.codeLensPassed, 'green', '#3BB26B', '#2F8F51');
-        this._skippedTestDecoration = this.createTestStatusDecorationType(Utility.codeLensSkipped, 'yellow', '#FED37F', '#FED37F');
-        this._notRunTestDecoration = this.createTestStatusDecorationType(Utility.codeLensNotRun, 'darkgrey', '#3BB26B', '#2F8F51');
+        this._failedTestDecoration = this.createTestStatusDecorationType(Config.decorationFailed, 'red', '#FF5648', '#AD322D');
+        this._passedTestDecoration = this.createTestStatusDecorationType(Config.decorationPassed, 'green', '#3BB26B', '#2F8F51');
+        this._skippedTestDecoration = this.createTestStatusDecorationType(Config.decorationSkipped, 'yellow', '#FED37F', '#FED37F');
+        this._notRunTestDecoration = this.createTestStatusDecorationType(Config.decorationNotRun, 'darkgrey', '#5D6D7E', '#AEB6BF');
 
         vscode.window.onDidChangeActiveTextEditor(this.onDidChangeActiveTextEditor, this, this._disposables);
         vscode.workspace.onDidChangeTextDocument(this.onDidChangeTextDocument, this, this._disposables);
