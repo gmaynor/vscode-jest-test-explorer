@@ -1,18 +1,27 @@
 import * as vscode from "vscode";
 import { TestCommands } from "./testCommands";
 import { ITestNode } from './nodes';
+import { DisposableManager } from './disposableManager';
 
 export class StatusBar {
     private status: vscode.StatusBarItem;
     private baseStatusText: string = "";
+    private _disposables = new DisposableManager();
 
     public constructor(testCommand: TestCommands) {
         this.status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-        testCommand.onTestDiscoveryStarted(this.discovering, this);
-        testCommand.onTestDiscoveryFinished(this.discovered, this);
-        testCommand.onTestRun(this.running, this);
-        testCommand.onTestResultsUpdated(this.updateCounts, this);
+        this._disposables.addDisposble("status", this.status);
+        this._disposables.addDisposble("discoveryStarted", testCommand.onTestDiscoveryStarted(this.discovering, this));
+        this._disposables.addDisposble("discoveryFinished", testCommand.onTestDiscoveryFinished(this.discovered, this));
+        this._disposables.addDisposble("testRun", testCommand.onTestRun(this.running, this));
+        this._disposables.addDisposble("resultsUpdated", testCommand.onTestResultsUpdated(this.updateCounts, this));
         this.discovering();
+
+        this.status.command = "workbench.view.extension.test";
+    }
+
+    public dispose() {
+        this._disposables.dispose();
     }
 
     private discovering() {
@@ -58,11 +67,5 @@ export class StatusBar {
                 return result; }, { passed: 0, failed: 0, notExecuted: 0 });
 
         this.status.text = `${this.baseStatusText} ($(check) ${counts.passed} | $(x) ${counts.failed} | $(question) ${counts.notExecuted})`;        
-    }
-
-    public dispose() {
-        if (this.status) {
-            this.status.dispose();
-        }
     }
 }
