@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
+import { DisposableManager } from "./disposableManager";
 import { ITestNode, ITestResult } from './nodes';
+import TestNodeManager from "./testNodeManager";
 import { Config } from "./utility";
-import { TestCommands } from "./testCommands";
 
 export class Problems {
 
@@ -45,12 +46,14 @@ export class Problems {
     }
 
     private _diagnosticCollection: vscode.DiagnosticCollection | null = null;
+    private _disposables: DisposableManager = new DisposableManager();
 
-    constructor(testCommands: TestCommands) {
+    constructor() {
         if (Config.addProblemsEnabled) {
-            testCommands.onTestResultsUpdated(this.addTestResults, this);
             this._diagnosticCollection = vscode.languages.createDiagnosticCollection("jest-test-explorer");
-            testCommands.onTestDiscoveryFinished(() => this._diagnosticCollection && this._diagnosticCollection.clear());
+            this._disposables.addDisposble("diagnositcs", this._diagnosticCollection);
+            this._disposables.addDisposble("testsUpdating", TestNodeManager.onTestsUpdating(this.handleTestsUpdating, this));
+            this._disposables.addDisposble("testsUpdated", TestNodeManager.onTestsUpdated(this.addTestResults, this));
         }
     }
 
@@ -60,7 +63,15 @@ export class Problems {
         }
     }
 
-    private addTestResults(tests: ITestNode[]) {
+    private handleTestsUpdating(file: vscode.Uri) {
+        if (this._diagnosticCollection === null) {
+            return;
+        }
+
+        this._diagnosticCollection.delete(file);
+    }
+
+    private addTestResults(rootNode?: ITestNode) {
 
         if (this._diagnosticCollection === null) {
             return;
@@ -68,7 +79,11 @@ export class Problems {
 
         this._diagnosticCollection.clear();
 
-        const problems = Problems.createProblemsFromTests(tests);
+        if (!rootNode || !rootNode.children) {
+            return;
+        }
+
+        const problems = Problems.createProblemsFromTests(rootNode.children);
 
         const newDiagnostics: Array<[vscode.Uri, vscode.Diagnostic[]]> = [];
 

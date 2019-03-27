@@ -1,17 +1,18 @@
 import * as vscode from 'vscode';
-import { TestCommands } from './testCommands';
-import { TestDirectories, IJestDirectory } from './testDirectories';
-import { DisposableManager } from './disposableManager';
-import { StatusBar } from './statusbar';
-import { JestTestExplorerTreeDataProvider } from './testExplorerTree';
-import { ITestNode } from './nodes';
-import { GotoTest } from './gotoTest';
-import { Problems } from './problems';
-import { TestStatusEditorDecorations } from './decorations';
-import Logger from './logger';
-import { Config } from './utility';
-import { registerTestCodeLens } from './testCodeLensProvider';
 import { registerCoverageCodeLens } from './coverageCodeLensProvider';
+import { TestStatusEditorDecorations } from './decorations';
+import { DisposableManager } from './disposableManager';
+import { GotoTest } from './gotoTest';
+import Logger from './logger';
+import { ITestNode } from './nodes';
+import { Problems } from './problems';
+import { StatusBar } from './statusbar';
+import { registerTestCodeLens } from './testCodeLensProvider';
+import { TestCommands } from './testCommands';
+import { TestDirectories } from './testDirectories';
+import { JestTestExplorerTreeDataProvider } from './testExplorerTree';
+import { Config, IJestDirectory } from './utility';
+import TestNodeManager from './testNodeManager';
 
 export class JestTestExplorer {
 
@@ -33,6 +34,7 @@ export class JestTestExplorer {
         testDirectories.onTestDirectorySearchCompleted(this.directorySearchCompleted, this);
 
         this._disposables.addDisposble("configChange", vscode.workspace.onDidChangeConfiguration(this.handleConfigChanged, this));
+        this._disposables.addDisposble("testNodeManager", TestNodeManager);
     }
 
     public dispose() {
@@ -44,18 +46,35 @@ export class JestTestExplorer {
         this.registerCommand("gotoTest", (test: ITestNode) => { gotoTest.go(test); });
         this.registerCommand("showLog", () => { Logger.show(); });
         this.registerCommand("stop", () => { this._testCommands.stopTests(); });
-        this.registerCommand("refreshTestExplorer", () => { this._testCommands.discoverTests(); });
-        this.registerCommand("runAllTests", () => { this._testCommands.runAllTests(); });
-        this.registerCommand("runTest", (test: ITestNode) => { this._testCommands.runTest(test); });
-        this.registerCommand("debugTest", (test: ITestNode) => { this._testCommands.debugTest(test); });
+        this.registerCommand("refreshTestExplorer", () => { this.saveOpenFiles().then(() => this._testCommands.discoverTests()); });
+        this.registerCommand("runAllTests", () => { this.saveOpenFiles().then(() => this._testCommands.runAllTests()); });
+        this.registerCommand("runTest", (test: ITestNode) => { this.saveOpenFiles().then(() => this._testCommands.runTest(test)); });
+        this.registerCommand("debugTest", (test: ITestNode) => { this.saveOpenFiles().then(() => this._testCommands.debugTest(test)); });
         this.registerCommand("runTestInContext", (test: ITestNode) => {
-            const openTestView = vscode.commands.executeCommand("workbench.view.extension.test", "workbench.view.extension.test");
-            openTestView.then(() => this._tree.reveal(test, { select: false, focus: true, expand: 3 })).then(() => { this._testCommands.runTest(test); });
+            this.saveOpenFiles()
+                .then(() => vscode.commands.executeCommand("workbench.view.extension.test", "workbench.view.extension.test"))
+                .then(() => this._tree.reveal(test, { select: false, focus: true, expand: 3 }))
+                .then(() => { this._testCommands.runTest(test); });
         });
         this.registerCommand("debugTestInContext", (test: ITestNode) => {
-            const openTestView = vscode.commands.executeCommand("workbench.view.extension.test", "workbench.view.extension.test");
-            openTestView.then(() => this._tree.reveal(test, { select: false, focus: true, expand: 3 })).then(() => { this._testCommands.debugTest(test); });
+            this.saveOpenFiles()
+                .then(() => vscode.commands.executeCommand("workbench.view.extension.test", "workbench.view.extension.test"))
+                .then(() => this._tree.reveal(test, { select: false, focus: true, expand: 3 }))
+                .then(() => { this._testCommands.debugTest(test); });
         });
+    }
+
+    private async saveOpenFiles() {
+        const dirtyDocs = vscode.workspace.textDocuments.filter(doc => doc.isDirty);
+        const saves: Thenable<boolean>[] = [];
+        if (dirtyDocs.length) {
+            dirtyDocs.forEach(doc => saves.push(doc.save()));
+        }
+        let i = 0;
+        while (i < saves.length) {
+            await saves[i];
+            i++;
+        }
     }
 
     private registerCommand(name: string, callback: any, thisArg?: any) {
@@ -99,7 +118,7 @@ export class JestTestExplorer {
             if (this._optionals[key]) {
                 return;
             }
-            this._optionals[key] = new Problems(this._testCommands);
+            this._optionals[key] = new Problems();
             this._disposables.addDisposble(key, this._optionals[key]);
         }
         else if (this._optionals[key]) {
@@ -114,7 +133,7 @@ export class JestTestExplorer {
             if (this._optionals[key]) {
                 return;
             }
-            this._optionals[key] = new TestStatusEditorDecorations(this._testCommands);
+            this._optionals[key] = new TestStatusEditorDecorations();
             this._disposables.addDisposble(key, this._optionals[key]);
         }
         else if (this._optionals[key]) {
@@ -136,7 +155,7 @@ export class JestTestExplorer {
     private addRemoveCoverageCodeLens() {
         const key = "coverageCodeLens";
         if (Config.showCoverageEnabled) {
-            this._disposables.addDisposble(key, registerCoverageCodeLens(this._testCommands));
+            this._disposables.addDisposble(key, registerCoverageCodeLens());
         }
         else {
             this._disposables.removeDisposable(key);

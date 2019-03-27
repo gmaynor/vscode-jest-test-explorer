@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import Logger from './logger';
 
 export class Executor {
-    public static runInTerminal(command: string, cwd?: string, addNewLine: boolean = true, terminal: string = "Test Explorer"): void {
+    public static runInTerminal(command: string, cwd?: string, addNewLine: boolean = true, terminal: string = "Jest Test Explorer"): void {
         if (this.terminals[terminal] === undefined) {
             this.terminals[terminal] = vscode.window.createTerminal(terminal);
         }

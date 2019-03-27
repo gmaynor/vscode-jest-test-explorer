@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { IJestDirectory } from './testDirectories';
+import { IJestDirectory } from './utility';
 import { ITestNode } from './nodes';
 
 export class DebugConfigurationProvider implements vscode.DebugConfigurationProvider {
@@ -41,6 +41,7 @@ export class DebugConfigurationProvider implements vscode.DebugConfigurationProv
       }
       debugConfiguration.args.push('--testNamePattern');
       debugConfiguration.args.push(this._test.fqName ? `${this._test.fqName.replace(/:/gi, ' ')}$` : '');
+      debugConfiguration.args.push('--no-coverage');
     }
 
     this._test = undefined;

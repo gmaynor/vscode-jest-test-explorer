@@ -1,23 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import Logger from "./logger";
-import { Utility } from "./utility";
-
-export interface IJestDirectory {
-    projectPath: string;
-    jestPath: string;
-    configPath: string;
-    workspaceFolder: vscode.WorkspaceFolder;
-}
-
-export class JestTestFile {
-    jestDirectory: IJestDirectory;
-    path: string;
-    constructor(jestDirectory: IJestDirectory, path: string) {
-        this.jestDirectory = jestDirectory;
-        this.path = path;
-    }
-}
+import { Utility, IJestDirectory } from "./utility";
 
 /* Maintains a list of all Directories containing
    Jest test files, as well as a map of the directories

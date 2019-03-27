@@ -1,53 +1,63 @@
 import * as vscode from 'vscode';
-import { Config } from './utility';
-import { TestCommands } from './testCommands';
+import { DisposableManager } from './disposableManager';
 import { ITestNode } from './nodes';
+import TestNodeManager from './testNodeManager';
+import { Config } from './utility';
 
 
 export class TestStatusEditorDecorations {
+    private _disposables: DisposableManager = new DisposableManager();
     private readonly _failedTestDecoration: vscode.TextEditorDecorationType;
     private readonly _passedTestDecoration: vscode.TextEditorDecorationType;
     private readonly _skippedTestDecoration: vscode.TextEditorDecorationType;
     private readonly _notRunTestDecoration: vscode.TextEditorDecorationType;
-    private readonly _disposables: vscode.Disposable[] = [];
     private readonly _fileTestMap: { [key: string]: ITestNode[] } = {};
     private _timeout: NodeJS.Timer | undefined = undefined;
 
-    public constructor(private testCommands: TestCommands) {
+    public constructor() {
         this._failedTestDecoration = this.createTestStatusDecorationType(Config.decorationFailed, 'red', '#FF5648', '#AD322D');
         this._passedTestDecoration = this.createTestStatusDecorationType(Config.decorationPassed, 'green', '#3BB26B', '#2F8F51');
         this._skippedTestDecoration = this.createTestStatusDecorationType(Config.decorationSkipped, 'yellow', '#FED37F', '#FED37F');
         this._notRunTestDecoration = this.createTestStatusDecorationType(Config.decorationNotRun, 'darkgrey', '#5D6D7E', '#AEB6BF');
 
-        vscode.window.onDidChangeActiveTextEditor(this.onDidChangeActiveTextEditor, this, this._disposables);
-        vscode.workspace.onDidChangeTextDocument(this.onDidChangeTextDocument, this, this._disposables);
-        this.testCommands.onTestResultsUpdated(this.handleTestResultsUpdated, this, this._disposables);
+        this._disposables.addDisposble("editorChanged", vscode.window.onDidChangeActiveTextEditor(this.onDidChangeActiveTextEditor, this));
+        this._disposables.addDisposble("documentChanged", vscode.workspace.onDidChangeTextDocument(this.onDidChangeTextDocument, this));
+        this._disposables.addDisposble("testsUpdated", TestNodeManager.onTestsUpdated(this.handleTestResultsUpdated, this));
+        this._disposables.addDisposble("testsUpdating", TestNodeManager.onTestsUpdating(this.handleTestsUpdating, this));
     }
 
     public dispose() {
-        while (this._disposables.length) {
-            const d = this._disposables.pop();
-            if (d) {
-                d.dispose();
-            }
+        this._disposables.dispose();
+    }
+
+    private handleTestsUpdating(file: vscode.Uri) {
+        if (this._fileTestMap[file.path]) {
+            this._fileTestMap[file.path] = [];
+        }
+
+        // trigger updates        
+        for (const editor of vscode.window.visibleTextEditors) {
+            this.triggerUpdateActiveEditor(editor);
         }
     }
 
-    private handleTestResultsUpdated(testNodes: ITestNode[]) {
+    private handleTestResultsUpdated(rootNode?: ITestNode) {
         // clear existing testFile-testNodes map
-        Object.keys(this._fileTestMap).forEach(key => delete this._fileTestMap[key]);
+        Object.keys(this._fileTestMap).forEach(key => this._fileTestMap[key] = []);
 
-        // build map of testFile-testNodes
-        const itNodes = testNodes.reduce((out, tNode) => { if (tNode.itBlocks) { out.push(...tNode.itBlocks); } else if (!tNode.isContainer) { out.push(tNode); } return out; }, [] as ITestNode[]);
-        itNodes.forEach(node => {
-            const file = node.jestTestFile ? node.jestTestFile.path : undefined;
-            if (file) {
-                if (!this._fileTestMap[file]) {
-                    this._fileTestMap[file] = [];
+        if (rootNode && rootNode.children) {
+            // build map of testFile-testNodes
+            const itNodes = rootNode.children.reduce((out, tNode) => { if (tNode.itBlocks) { out.push(...tNode.itBlocks); } else if (!tNode.isContainer) { out.push(tNode); } return out; }, [] as ITestNode[]);
+            itNodes.forEach(node => {
+                const file = node.jestTestFile ? node.jestTestFile.path : undefined;
+                if (file) {
+                    if (!this._fileTestMap[file]) {
+                        this._fileTestMap[file] = [];
+                    }
+                    this._fileTestMap[file].push(node);
                 }
-                this._fileTestMap[file].push(node);
-            }
-        });
+            });
+        }
 
         // trigger updates        
         for (const editor of vscode.window.visibleTextEditors) {
@@ -86,7 +96,10 @@ export class TestStatusEditorDecorations {
         editor.setDecorations(this._skippedTestDecoration, []);
         editor.setDecorations(this._notRunTestDecoration, []);
 
-        const itBlocks = this._fileTestMap[editor.document.uri.path];
+        const itBlocks = this._fileTestMap[editor.document.uri.path] || [];
+        if (!itBlocks.length) {
+            return;
+        }
         const passBlocks = itBlocks.filter(it => it.testResult && it.testResult.status === 'passed');
         const failBlocks = itBlocks.filter(it => it.testResult && it.testResult.status === 'failed');
         const skipBlocks = itBlocks.filter(it => it.testResult && it.testResult.status === 'skipped');
@@ -166,7 +179,7 @@ export class TestStatusEditorDecorations {
             rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
         });
 
-        this._disposables.push(retVal);
+        this._disposables.addDisposble(`decoration_${decoText}`, retVal);
         return retVal;
     }
 

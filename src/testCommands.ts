@@ -1,21 +1,22 @@
 import { commands, Event, EventEmitter, Disposable, debug, workspace, WorkspaceFolder, Uri } from "vscode";
 import { Executor } from "./executor";
 import Logger from "./logger";
-import { TestDirectories, IJestDirectory } from "./testDirectories";
+import { TestDirectories } from "./testDirectories";
 import { DebugConfigurationProvider } from './debugConfigurationProvider';
-import { ITestNode, loadTests, getRootNode, parseTestResults } from './nodes';
+import { ITestNode } from './nodes';
+import TestNodeManager  from './testNodeManager';
+import { DisposableManager } from "./disposableManager";
+import { Config, IJestDirectory } from "./utility";
 
 export class TestCommands {
     private onTestDiscoveryStartedEmitter = new EventEmitter<string>();
-    private onTestDiscoveryFinishedEmitter = new EventEmitter<ITestNode | undefined>();
     private onTestRunEmitter = new EventEmitter<ITestNode>();
     private onTestStoppedEmitter = new EventEmitter<void>();
-    private onTestResultsUpdatedEmitter = new EventEmitter<ITestNode[]>();
     private _debugConfigProvider: DebugConfigurationProvider | undefined;
-    private _debugConfigDisposables: Disposable[] = [];
+    private _disposables: DisposableManager = new DisposableManager();
 
     constructor(private testDirectories: TestDirectories) { 
-        testDirectories.onTestDirectorySearchCompleted(this.initializeDebugConfigProvider, this);
+        this._disposables.addDisposble("directorySearch", testDirectories.onTestDirectorySearchCompleted(this.initializeDebugConfigProvider, this));
     }
 
     public async discoverTests() {
@@ -23,21 +24,18 @@ export class TestCommands {
 
         let rootNode: ITestNode | undefined = undefined;
         try {
-            rootNode = await loadTests(this.testDirectories.getTestDirectories());
+            await TestNodeManager.LoadTests(this.testDirectories.getTestDirectories());
 
-            Logger.info(`${rootNode.itBlocks ? rootNode.itBlocks.length : 0} tests discovered.`);
+            rootNode = TestNodeManager.RootNode;
+
+            Logger.info(`${(!!rootNode && !!rootNode.itBlocks) ? rootNode.itBlocks.length : 0} tests discovered.`);
         } catch (error) {
             Logger.error(`Error during test discovery: ${error}`);
         }
-        this.onTestDiscoveryFinishedEmitter.fire(rootNode);
     }
 
     public get onTestDiscoveryStarted(): Event<string> {
         return this.onTestDiscoveryStartedEmitter.event;
-    }
-
-    public get onTestDiscoveryFinished(): Event<ITestNode | undefined> {
-        return this.onTestDiscoveryFinishedEmitter.event;
     }
 
     public get onTestRun(): Event<ITestNode> {
@@ -46,10 +44,6 @@ export class TestCommands {
 
     public get onTestStop(): Event<void> {
         return this.onTestStoppedEmitter.event;
-    }
-
-    public get onTestResultsUpdated(): Event<ITestNode[]> {
-        return this.onTestResultsUpdatedEmitter.event;
     }
 
     public runAllTests(): void {
@@ -101,24 +95,33 @@ export class TestCommands {
     }
 
     public dispose() {
-        this.unregisterDebugConfigProvider();
+        this._disposables.dispose();
     }
 
     private initializeDebugConfigProvider(dirs: IJestDirectory[]) {
-        this.unregisterDebugConfigProvider();
+        this._disposables.removeDisposable("nodeDebugConfig");
+        this._disposables.removeDisposable("debugConfig");
+
         this._debugConfigProvider = new DebugConfigurationProvider(dirs, this.getJestCommand);
         // this provides the opportunity to inject test names into the DebugConfiguration
-        this._debugConfigDisposables.push(debug.registerDebugConfigurationProvider('node', this._debugConfigProvider));
+        this._disposables.addDisposble("nodeDebugConfig", debug.registerDebugConfigurationProvider('node', this._debugConfigProvider));
         // this provides the snippets generation
-        this._debugConfigDisposables.push(debug.registerDebugConfigurationProvider('vscode-jest-tests', this._debugConfigProvider));
+        this._disposables.addDisposble("debugConfig", debug.registerDebugConfigurationProvider('vscode-jest-tests', this._debugConfigProvider));
     }
 
     private getJestCommand(jestDir: IJestDirectory, test?: ITestNode): { command: string, commandArgs: string[] } {
         const command = jestDir.jestPath;
-        const commandArgs: string[] = ["--ci", `--rootDir ${jestDir.projectPath} --json --testLocationInResults`];
+        const commandArgs: string[] = ["--ci", `--rootDir ${jestDir.projectPath}`, '--json', '--testLocationInResults'];
 
         if (jestDir.configPath) {
             commandArgs.push(`-c ${jestDir.configPath}`);
+        }
+
+        if (Config.collectCoverageEnabled && (!test || test.isContainer)) {
+            commandArgs.push('--coverage');
+        }
+        else {
+            commandArgs.push('--no-coverage');
         }
 
         if (test) {
@@ -156,7 +159,7 @@ export class TestCommands {
     private runTestCommandForSpecificDirectory(jestDir: IJestDirectory, test: ITestNode | undefined): Promise<void> {
         const { command, commandArgs } = this.getJestCommand(jestDir, test);
 
-        this.onTestRunEmitter.fire(test || getRootNode());
+        this.onTestRunEmitter.fire(test || TestNodeManager.RootNode);
 
         return new Promise((resolve, reject) => {
             const cmd = `${command} ${commandArgs.join(' ')}`;
@@ -170,29 +173,13 @@ export class TestCommands {
                     else {
                         Logger.info('Test execution stopped.');
                     }
-                    this.fireTestResultsUpdated();
                     return;
                 }
 
-                parseTestResults(stdout);
-                this.fireTestResultsUpdated();
+                TestNodeManager.ParseTestResults(stdout);
 
                 resolve();
             }, jestDir.projectPath, true);
         });
-    }
-
-    private fireTestResultsUpdated() {
-        const root = getRootNode();
-        this.onTestResultsUpdatedEmitter.fire(root ? root.children : undefined);
-    }
-
-    private unregisterDebugConfigProvider() {
-        while (this._debugConfigDisposables.length) {
-            const disposable = this._debugConfigDisposables.pop();
-            if (disposable) {
-                disposable.dispose();
-            }
-        }
     }
 }

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { TestDirectories, IJestDirectory } from './testDirectories';
+import { TestDirectories } from './testDirectories';
 import Logger from './logger';
-import { Config } from './utility';
+import { Config, IJestDirectory } from './utility';
 import { JestTestExplorer } from './jestTestExplorer';
 import { DisposableManager } from './disposableManager';
 

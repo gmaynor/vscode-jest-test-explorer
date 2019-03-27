@@ -18,15 +18,53 @@ export const existsP = promisify(fs.exists);
 export const DefaultPosition: vscode.Position = new vscode.Position(0.01, 0.01);
 export const DefaultRange: vscode.Range = new vscode.Range(DefaultPosition, DefaultPosition);
 
-export type TestNodeType = 'root' | 'describe' | 'it' | 'expect';
-export const TestNodeTypes = {
-  root: 'root',
-  describe: 'describe',
-  it: 'it',
-  expect: 'expect'
-};
+export interface IJestDirectory {
+    projectPath: string;
+    jestPath: string;
+    configPath: string;
+    workspaceFolder: vscode.WorkspaceFolder;
+}
 
-export type TestStatus = 'pending' | 'passed' | 'failed' | 'skipped' | 'todo';
+export class JestTestFile {
+    jestDirectory: IJestDirectory;
+    path: string;
+    constructor(jestDirectory: IJestDirectory, path: string) {
+        this.jestDirectory = jestDirectory;
+        this.path = path;
+    }
+}
+
+/**
+ * A function that emits a side effect and does not return anything.
+ */
+type DebouncedProcedure = (...args: any[]) => void;
+
+export function debounce<F extends DebouncedProcedure>(func: F, wait: number = 50, isImmediate: boolean = false): F {
+  let timeoutId: NodeJS.Timeout | undefined;
+
+  return function(this: any, ...args: any[]) {
+    const context = this;
+
+    const later = function() {
+      timeoutId = undefined;
+      if (!isImmediate) {
+        func.apply(context, args);
+      }
+    };
+
+    const callNow = isImmediate && timeoutId === undefined;
+
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+
+    timeoutId = setTimeout(later, wait);
+
+    if (callNow) {
+      func.apply(context, args);
+    }
+  } as any;
+}
 
 export class Config {
     private static useTreeView: boolean;

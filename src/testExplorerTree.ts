@@ -3,8 +3,9 @@ import * as vscode from 'vscode';
 import { TreeDataProvider, TreeItem } from 'vscode';
 import { DisposableManager } from './disposableManager';
 import { TestCommands } from './testCommands';
-import { ITestNode } from './nodes';
-import { Config, TestNodeType, DefaultPosition, DefaultRange } from './utility';
+import TestNodeManager from './testNodeManager';
+import { ITestNode, TestNodeType } from './nodes';
+import { Config, DefaultPosition, DefaultRange } from './utility';
 
 class ArtificialTestNode implements ITestNode {
     public name: string;
@@ -35,6 +36,15 @@ class ArtificialTestNode implements ITestNode {
     }
     mergeWith(other: ITestNode) {
     }
+    flatten() {
+        return [ this ];
+    }
+    flattenUp() {
+        return [ this ];
+    }
+    flattenDown() {
+        return [ this ];
+    }
 }
 class ErrorNode extends ArtificialTestNode {
 }
@@ -54,10 +64,9 @@ export class JestTestExplorerTreeDataProvider implements TreeDataProvider<ITestN
 
     constructor(private context: vscode.ExtensionContext, testCommands: TestCommands) {
         this._disposables.addDisposble("disoveringTests", testCommands.onTestDiscoveryStarted(this.updateWithDiscoveringTests, this));
-        this._disposables.addDisposble("discoveredTests", testCommands.onTestDiscoveryFinished(this.updateWithDiscoveredTests, this));
+        this._disposables.addDisposble("testsUpdated", TestNodeManager.onTestsUpdated(this.updateWithDiscoveredTests, this));
         this._disposables.addDisposble("testRun", testCommands.onTestRun(this.updateTreeWithRunningTests, this));
         this._disposables.addDisposble("testStop", testCommands.onTestStop(this.updateTreeWithStoppedTests, this));
-        this._disposables.addDisposble("testResults", testCommands.onTestResultsUpdated(this.updateTreeWithStoppedTests, this));
     }
 
     public getTreeItem(element: ITestNode): TreeItem {

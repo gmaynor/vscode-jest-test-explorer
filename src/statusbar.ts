@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 import { TestCommands } from "./testCommands";
-import { ITestNode } from './nodes';
+import { ITestNode, ITestResult } from './nodes';
 import { DisposableManager } from './disposableManager';
+import TestNodeManager from "./testNodeManager";
 
 export class StatusBar {
     private status: vscode.StatusBarItem;
@@ -12,9 +13,8 @@ export class StatusBar {
         this.status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
         this._disposables.addDisposble("status", this.status);
         this._disposables.addDisposble("discoveryStarted", testCommand.onTestDiscoveryStarted(this.discovering, this));
-        this._disposables.addDisposble("discoveryFinished", testCommand.onTestDiscoveryFinished(this.discovered, this));
+        this._disposables.addDisposble("testsUpdated", TestNodeManager.onTestsUpdated(this.discovered, this));
         this._disposables.addDisposble("testRun", testCommand.onTestRun(this.running, this));
-        this._disposables.addDisposble("resultsUpdated", testCommand.onTestResultsUpdated(this.updateCounts, this));
         this.discovering();
 
         this.status.command = "workbench.view.extension.test";
@@ -33,6 +33,8 @@ export class StatusBar {
     private discovered(e: ITestNode | undefined) {
         this.baseStatusText = `$(beaker) ${e && e.itBlocks ? e.itBlocks.length : 0} Jest tests`;
         this.status.text = this.baseStatusText;
+        const children = (e ? e.children : []) || [];
+        this.updateCounts(children);
     }
 
     private running(node: ITestNode) {
@@ -42,30 +44,43 @@ export class StatusBar {
     }
 
     private updateCounts(results: ITestNode[]) {
-        const tests: ITestNode[] = results.reduce((out, item) => { if (item.itBlocks && item.itBlocks.length > 0) { out.push(...item.itBlocks); } else if (!item.isContainer) { out.push(item); }  return out;}, [] as ITestNode[]);
-        const counts = results.reduce(( result, x ) => { 
-                if (x.isContainer) {
-                    const itBlocks = x.itBlocks || [];
-                    result.passed += itBlocks.filter(a => { const tNode = a as ITestNode; return tNode.testResult && tNode.testResult.status  === 'passed'; }).length; 
-                    result.failed += itBlocks.filter(a => { const tNode = a as ITestNode; return tNode.testResult && tNode.testResult.status  === 'failed'; }).length; 
-                    result.notExecuted += itBlocks.filter(a => { const tNode = a as ITestNode; return tNode.testResult && tNode.testResult.status  !== 'passed' && tNode.testResult.status !== 'failed'; }).length; 
+        const tests: ITestNode[] = results.reduce((out, item) => { if (item.itBlocks && item.itBlocks.length > 0) { out.push(...item.itBlocks); } else if (!item.isContainer) { out.push(item); } return out; }, [] as ITestNode[]);
+        const testResults = tests.reduce((out, test) => {
+            const processIt = (it: ITestNode) => {
+                if (it.testResult) {
+                    out.push(it.testResult);
                 }
-                else if (!x.testResult) { result.notExecuted += 1; }
-                else {
-                    switch (x.testResult.status) {
-                        case 'passed':
-                            result.passed += 1;
-                            break;
-                        case 'failed':
-                            result.failed += 1;
-                            break;
-                        default:
-                            result.notExecuted += 1;
-                            break;
-                    }
-                }
-                return result; }, { passed: 0, failed: 0, notExecuted: 0 });
+            };
 
-        this.status.text = `${this.baseStatusText} ($(check) ${counts.passed} | $(x) ${counts.failed} | $(question) ${counts.notExecuted})`;        
+            if (!test.isContainer) {
+                processIt(test);
+            }
+            else if (test.itBlocks) {
+                test.itBlocks.forEach(it => processIt(it));
+            }
+
+            return out;
+        }, [] as ITestResult[]);
+
+        if (!testResults.length) {
+            return;
+        }
+        const counts = testResults.reduce((result, x) => {
+            switch (x.status) {
+                case 'passed':
+                    result.passed += 1;
+                    break;
+                case 'failed':
+                    result.failed += 1;
+                    break;
+                default:
+                    result.notExecuted += 1;
+                    break;
+            }
+
+            return result;
+        }, { passed: 0, failed: 0, notExecuted: tests.length - testResults.length });
+
+        this.status.text = `${this.baseStatusText} ($(check) ${counts.passed} | $(x) ${counts.failed} | $(question) ${counts.notExecuted})`;
     }
 }

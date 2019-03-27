@@ -2,7 +2,7 @@
 	"name": "jest-test-explorer",
 	"displayName": "Jest Test Explorer",
 	"description": "Jest Test Explorer for Visual Studio Code",
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"preview": true,
 	"author": "Gibbs Maynor <g.maynor@gmail.com>",
 	"publisher": "gmaynor",
@@ -207,10 +207,15 @@
 					"default": true,
 					"description": "If true, failed test will add to the problems view"
 				},
-				"jest-test-explorer.autoWatch": {
+				"jest-test-explorer.collectCoverage": {
 					"type": "boolean",
 					"default": false,
-					"description": "If true, starts jest watch test after test discovery is completed"
+					"description": "If true, collects code coverage when 'Run All Tests' is executed"
+				},
+				"jest-test-explorer.showCoverage": {
+					"type": "boolean",
+					"default": false,
+					"description": "Determines whether or not to show code coverage stats in code lens.  Only takes effect if collectCoverage is set."
 				},
 				"jest-test-explorer.testArguments": {
 					"type": "string",

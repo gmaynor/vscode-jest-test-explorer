@@ -1,30 +1,24 @@
 import * as vscode from 'vscode';
-import { TestCommands } from './testCommands';
-import { getCoverageMap, ICoverageMap } from './nodes';
+import CoverageMapManager from './coverageMapManager';
+import { DisposableManager } from './disposableManager';
 
-export function registerCoverageCodeLens(commands: TestCommands) {
+export function registerCoverageCodeLens() {
   return vscode.languages.registerCodeLensProvider(
       { pattern: '**/*.{ts,tsx,js,jsx}', scheme: 'file' },
-      new CoverageCodeLensProvider(commands)
+      new CoverageCodeLensProvider()
     );
 }
 
 class CoverageCodeLensProvider implements vscode.CodeLensProvider {
-  private disposables: vscode.Disposable[] = [];
+  private _disposables: DisposableManager = new DisposableManager();
   private onDidChangeCodeLensesEmitter = new vscode.EventEmitter<void>();
 
-  public constructor(testCommands: TestCommands) {
-    this.disposables.push(testCommands.onTestDiscoveryFinished(() => this.onDidChangeCodeLensesEmitter.fire()));
-    this.disposables.push(testCommands.onTestResultsUpdated(() => this.onDidChangeCodeLensesEmitter.fire()));
+  public constructor() {
+    this._disposables.addDisposble("coverageUpdated", CoverageMapManager.onCoverageUpdated(() => this.onDidChangeCodeLensesEmitter.fire()));
   }
 
   public dispose() {
-    while (this.disposables.length) {
-      const disposable = this.disposables.pop();
-      if (disposable) {
-        disposable.dispose();
-      }
-    }
+    this._disposables.dispose();
   }
 
   public get onDidChangeCodeLenses(): vscode.Event<void> {
@@ -32,7 +26,7 @@ class CoverageCodeLensProvider implements vscode.CodeLensProvider {
   }
 
   public provideCodeLenses(document: vscode.TextDocument, _token: vscode.CancellationToken) {
-    const coverageMap = getCoverageMap() || {};
+    const coverageMap = CoverageMapManager.CoverageMap || {};
     const coverageKey = Object.keys(coverageMap).find(x => x === document.uri.path);
     const coverage = coverageKey ? coverageMap[coverageKey] : undefined;
     if (!coverage) {

@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import { CancellationToken, CodeLens, CodeLensProvider, Disposable, Event, EventEmitter, TextDocument, Range, Command } from "vscode";
 import { TestCommands } from "./testCommands";
-import { getRootNode, ITestNode } from './nodes';
+import { ITestNode } from './nodes';
+import TestNodeManager from './testNodeManager';
 import { Config, DefaultPosition } from "./utility";
+import { DisposableManager } from './disposableManager';
 
 class RunTestCodeLens extends CodeLens {
 
@@ -51,21 +53,17 @@ export function registerTestCodeLens(commands: TestCommands) {
   }
   
 class TestCodeLensProvider implements CodeLensProvider {
-    private disposables: Disposable[] = [];
+    private _disposables: DisposableManager = new DisposableManager();
+    private _testsUpdating: boolean = false;
     private onDidChangeCodeLensesEmitter = new EventEmitter<void>();
 
     public constructor(private testCommands: TestCommands) {
-        this.disposables.push(testCommands.onTestDiscoveryFinished(() => this.onDidChangeCodeLensesEmitter.fire()));
-        this.disposables.push(testCommands.onTestResultsUpdated(() => this.onDidChangeCodeLensesEmitter.fire()));
+        this._disposables.addDisposble("testsUpdating", TestNodeManager.onTestsUpdating(this.handleTestsUpdating, this));
+        this._disposables.addDisposble("testsUpdated", TestNodeManager.onTestsUpdated(this.handleTestResultsUpdated, this));
     }
 
     public dispose() {
-        while (this.disposables.length) {
-            const disposable = this.disposables.pop();
-            if (disposable) {
-                disposable.dispose();
-            }
-        }
+        this._disposables.dispose();
     }
 
     public get onDidChangeCodeLenses(): Event<void> {
@@ -73,10 +71,10 @@ class TestCodeLensProvider implements CodeLensProvider {
     }
 
     public provideCodeLenses(document: TextDocument, token: CancellationToken): CodeLens[] | Thenable<CodeLens[]> {
-        if (!Config.codeLensEnabled) {
+        if (!Config.codeLensEnabled || this._testsUpdating) {
             return [];
         }
-        const rootNode = getRootNode();
+        const rootNode = TestNodeManager.RootNode;
         if (!rootNode) {
             return [];
         }
@@ -98,5 +96,18 @@ class TestCodeLensProvider implements CodeLensProvider {
 
     public resolveCodeLens(codeLens: CodeLens, token: CancellationToken): CodeLens {
         return codeLens;
+    }
+
+    private handleTestsUpdating(file: vscode.Uri) {
+        if (this._testsUpdating) {
+            return;
+        }
+        this._testsUpdating = true;
+        this.onDidChangeCodeLensesEmitter.fire();
+    }
+
+    private handleTestResultsUpdated(rootNode?: ITestNode) {
+        this._testsUpdating = false;
+        this.onDidChangeCodeLensesEmitter.fire();
     }
 }
