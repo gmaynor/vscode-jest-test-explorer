@@ -37,13 +37,13 @@ class ArtificialTestNode implements ITestNode {
     mergeWith(other: ITestNode) {
     }
     flatten() {
-        return [ this ];
+        return [this];
     }
     flattenUp() {
-        return [ this ];
+        return [this];
     }
     flattenDown() {
-        return [ this ];
+        return [this];
     }
 }
 class ErrorNode extends ArtificialTestNode {
@@ -106,106 +106,111 @@ export class JestTestExplorerTreeDataProvider implements TreeDataProvider<ITestN
                     if (aName < bName) { return -1; }
                     if (aName > bName) { return 1; }
                 }
+                // const aName = a.fqName || '';
+                // const bName = b.fqName || '';
+                // if (aName < bName) { return -1; }
+                // if (aName > bName) { return 1; }
+                
                 return 0;
-            });
-        };
+        });
+    };
 
-        if (element) {
-            return sortChildren(element.children || []);
-        }
+    if(element) {
+        return sortChildren(element.children || []);
+    }
 
-        if (this._discovering) {
-            return [new LoadingNode()];
-        }
+    if(this._discovering) {
+        return [new LoadingNode()];
+    }
 
-        if (!this._rootNode) {
-            return ["Please open or set the test project", "and ensure your project compiles."].map((e) => {
-                return new ErrorNode(e);
-            });
-        }
+    if(!this._rootNode) {
+        return ["Please open or set the test project", "and ensure your project compiles."].map((e) => {
+            return new ErrorNode(e);
+        });
+    }
 
-        const useTreeView = Config.useTreeViewEnabled;
+    const useTreeView = Config.useTreeViewEnabled;
 
-        if (!useTreeView) {
-            return this._rootNode.itBlocks || [];
-        }
+    if(!useTreeView) {
+        return this._rootNode.itBlocks || [];
+    }
 
         return sortChildren(this._rootNode.children || []);
     }
 
-    public getParent(element?: ITestNode): ITestNode | undefined {
-        if (!element) {
-            return;
-        }
-        if (!element.parent || element.parent.type === 'root') {
-            return;
-        }
-        return element.parent;
+    public getParent(element ?: ITestNode): ITestNode | undefined {
+    if (!element) {
+        return;
     }
+    if (!element.parent || element.parent.type === 'root') {
+        return;
+    }
+    return element.parent;
+}
 
     public refresh() {
-        this._onDidChangeTreeData.fire();
-    }
+    this._onDidChangeTreeData.fire();
+}
 
     public dispose() {
-        this._disposables.dispose();
-    }
+    this._disposables.dispose();
+}
 
     private updateWithDiscoveringTests(): void {
-        this._discovering = true;
-        this._onDidChangeTreeData.fire();
-    }
-    private updateWithDiscoveredTests(node?: ITestNode) {
-        this._discovering = false;
-        this._rootNode = node;
-        this._onDidChangeTreeData.fire();
-    }
+    this._discovering = true;
+    this._onDidChangeTreeData.fire();
+}
+    private updateWithDiscoveredTests(node ?: ITestNode) {
+    this._discovering = false;
+    this._rootNode = node;
+    this._onDidChangeTreeData.fire();
+}
 
     private updateTreeWithRunningTests(node: ITestNode) {
-        const testRun: ITestNode[] = node.isContainer ? node.itBlocks || [] : [node];
+    const testRun: ITestNode[] = node.isContainer ? node.itBlocks || [] : [node];
 
-        testRun.forEach((testNode: ITestNode) => {
-            testNode.running = true;
-            this._onDidChangeTreeData.fire(testNode);
-        });
-    }
+    testRun.forEach((testNode: ITestNode) => {
+        testNode.running = true;
+        this._onDidChangeTreeData.fire(testNode);
+    });
+}
 
     private updateTreeWithStoppedTests() {
-        if (this._rootNode && this._rootNode.itBlocks) {
-            this._rootNode.itBlocks.forEach(x => { x.running = false; });
-        }
-        this._onDidChangeTreeData.fire();
+    if (this._rootNode && this._rootNode.itBlocks) {
+        this._rootNode.itBlocks.forEach(x => { x.running = false; });
     }
+    this._onDidChangeTreeData.fire();
+}
 
     private getIcon(node: ITestNode): { dark: string, light: string } {
-        let retVal: string;
-        if (node.running) {
-            retVal = "spinner.svg";
-        }
-        else if (!node.testResult) {
-            retVal = node.isContainer ? 'namespace.png' : 'testNotRun.png';
-        }
-        else {
-            const status = node.testResult.status;
-            switch (status) {
-                case 'failed':
-                    retVal = 'Failed.png';
-                    break;
-                case 'passed':
-                    retVal = 'Passed.png';
-                    break;
-                case 'skipped':
-                    retVal = 'NotExecuted.png';
-                    break;
-                default:
-                    retVal = node.isContainer ? '.png' : 'NotRun.png';
-                    break;
-            }
-            retVal = `${node.isContainer ? 'namespace' : 'test'}${retVal}`;
-        }
-        return {
-            dark: this.context.asAbsolutePath(path.join("resources", "dark", retVal)),
-            light: this.context.asAbsolutePath(path.join("resources", "light", retVal)),
-        };
+    let retVal: string;
+    if (node.running) {
+        retVal = "spinner.svg";
     }
+    else if (!node.testResult) {
+        retVal = node.isContainer ? 'namespace.png' : 'testNotRun.png';
+    }
+    else {
+        const status = node.testResult.status;
+        switch (status) {
+            case 'failed':
+                retVal = 'Failed.png';
+                break;
+            case 'passed':
+                retVal = 'Passed.png';
+                break;
+            case 'skipped':
+                retVal = 'NotExecuted.png';
+                break;
+            default:
+                retVal = node.isContainer ? '.png' : 'NotRun.png';
+                break;
+        }
+        retVal = `${node.isContainer ? 'namespace' : 'test'}${retVal}`;
+    }
+    return {
+        dark: this.context.asAbsolutePath(path.join("resources", "dark", retVal)),
+        light: this.context.asAbsolutePath(path.join("resources", "light", retVal)),
+    };
+}
 }

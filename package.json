@@ -192,11 +192,6 @@
 					"default": true,
 					"description": "Determines whether or not to show test status decorations in the editor."
 				},
-				"jest-test-explorer.pathForResultFile": {
-					"type": "string",
-					"default": "",
-					"description": "The path to (temporarily) store test result files in"
-				},
 				"jest-test-explorer.autoExpandTree": {
 					"type": "boolean",
 					"default": false,
