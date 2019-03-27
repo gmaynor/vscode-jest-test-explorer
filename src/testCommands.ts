@@ -129,6 +129,8 @@ export class TestCommands {
             if (!test.isContainer) {
                 testName += '$';
             }
+            testName = testName.replace(/\(/gi, '\\(');
+            testName = testName.replace(/\)/gi, '\\)');
             commandArgs.push(` -t "${testName}"`);
         }
 

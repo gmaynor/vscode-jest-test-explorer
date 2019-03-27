@@ -39,9 +39,13 @@ export class DebugConfigurationProvider implements vscode.DebugConfigurationProv
       if (this._test.jestTestFile) {
         debugConfiguration.args.push(this._test.jestTestFile.path);
       }
-      debugConfiguration.args.push('--testNamePattern');
-      debugConfiguration.args.push(this._test.fqName ? `${this._test.fqName.replace(/:/gi, ' ')}$` : '');
       debugConfiguration.args.push('--no-coverage');
+      debugConfiguration.args.push('--testNamePattern');
+      let fqName = this._test.fqName || '';
+      fqName = fqName.replace(/:/gi, ' ');
+      fqName = fqName.replace(/\(/gi, '\\(');
+      fqName = fqName.replace(/\)/gi, '\\)');
+      debugConfiguration.args.push(fqName === '' ? fqName : `${fqName}$`);
     }
 
     this._test = undefined;
