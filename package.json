@@ -283,12 +283,11 @@
 	},
 	"dependencies": {
 		"@types/babylon": "^6.16.5",
-		"@types/fkill": "^5.3.1",
 		"@types/glob": "^7.1.1",
 		"babel-types": "^6.26.0",
 		"babylon": "^6.18.0",
 		"chokidar": "^2.1.5",
-		"fkill": "^5.3.0",
+		"fkill": "^6.1.0",
 		"spawn-sync": "^2.0.0"
 	}
 }
