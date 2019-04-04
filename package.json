@@ -103,6 +103,10 @@
 					"light": "resources/light/gototest.svg",
 					"dark": "resources/dark/gototest.svg"
 				}
+			},
+			{
+				"command": "jest-test-explorer.generateTestFile",
+				"title": "Generate Test File(s)"
 			}
 		],
 		"menus": {
@@ -154,22 +158,32 @@
 				{
 					"command": "jest-test-explorer.runTestInContext",
 					"group": "jestTestExplorer@0",
-					"when": "resourceLangId == javascript"
+					"when": "resourceLangId == javascript && resourceFilename =~ /test/"
 				},
 				{
 					"command": "jest-test-explorer.runTestInContext",
 					"group": "jestTestExplorer@0",
-					"when": "resourceLangId == typescript"
+					"when": "resourceLangId == typescript && resourceFilename =~ /test/"
 				},
 				{
 					"command": "jest-test-explorer.debugTestInContext",
 					"group": "jestTestExplorer@1",
-					"when": "resourceLangId == javascript"
+					"when": "resourceLangId == javascript && resourceFilename =~ /test/"
 				},
 				{
 					"command": "jest-test-explorer.debugTestInContext",
 					"group": "jestTestExplorer@1",
-					"when": "resourceLangId == typescript"
+					"when": "resourceLangId == typescript && resourceFilename =~ /test/"
+				},
+				{
+					"command": "jest-test-explorer.generateTestFile",
+					"group": "jestTestExplorer@0",
+					"when": "resourceLangId == javascript && resourceFilename =~ /^((?!(test)).)*$/"
+				},
+				{
+					"command": "jest-test-explorer.generateTestFile",
+					"group": "jestTestExplorer@0",
+					"when": "resourceLangId == typescript && resourceFilename =~ /^((?!(test)).)*$/"
 				}
 			]
 		},
@@ -212,6 +226,11 @@
 					"default": false,
 					"description": "Determines whether or not to show code coverage stats in code lens.  Only takes effect if collectCoverage is set."
 				},
+				"jest-test-explorer.generatedTestFileLocation": {
+					"type": "string",
+					"default": "",
+					"description": "Determines where generated test files will be created (relative to the Jest tested project [not necessarily the workspace folder].  An empty string, the default value, will generate test files in the same folder as the source file."
+				},
 				"jest-test-explorer.testArguments": {
 					"type": "string",
 					"default": "",
@@ -253,23 +272,22 @@
 		"test-compile": "tsc -p ./"
 	},
 	"devDependencies": {
-		"@types/node": "^10.14.1",
+		"@types/node": "^10.14.4",
 		"ts-loader": "^5.3.3",
-		"tslint": "^5.14.0",
-		"typescript": "^3.3.1",
-		"vsce": "^1.58.0",
-		"vscode": "^1.1.30",
+		"tslint": "^5.15.0",
+		"typescript": "^3.4.1",
+		"vsce": "^1.59.0",
+		"vscode": "^1.1.33",
 		"webpack": "^4.29.6",
 		"webpack-cli": "^3.3.0"
 	},
 	"dependencies": {
-		"@types/babel-types": "^7.0.6",
 		"@types/babylon": "^6.16.5",
-		"@types/fkill": "^5.3.0",
+		"@types/fkill": "^5.3.1",
 		"@types/glob": "^7.1.1",
 		"babel-types": "^6.26.0",
 		"babylon": "^6.18.0",
-		"chokidar": "^2.1.2",
+		"chokidar": "^2.1.5",
 		"fkill": "^5.3.0",
 		"spawn-sync": "^2.0.0"
 	}

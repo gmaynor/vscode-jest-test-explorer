@@ -13,6 +13,7 @@ import { TestDirectories } from './testDirectories';
 import { JestTestExplorerTreeDataProvider } from './testExplorerTree';
 import { Config, IJestDirectory } from './utility';
 import TestNodeManager from './testNodeManager';
+import { TestFileGenerator } from './testFileGenerator';
 
 export class JestTestExplorer {
 
@@ -21,6 +22,7 @@ export class JestTestExplorer {
     private _testCommands: TestCommands;
     private _treeData: JestTestExplorerTreeDataProvider;
     private _tree: vscode.TreeView<ITestNode | undefined>;
+    private _testFileGenerator: TestFileGenerator;
 
     constructor(private context: vscode.ExtensionContext, testDirectories: TestDirectories) {
         this._testCommands = new TestCommands(testDirectories);
@@ -30,6 +32,8 @@ export class JestTestExplorer {
         this._treeData = new JestTestExplorerTreeDataProvider(context, this._testCommands);
         this._disposables.addDisposble("treeData", this._treeData);
         this._tree = vscode.window.createTreeView("jestTestExplorer", { treeDataProvider: this._treeData });
+
+        this._testFileGenerator = new TestFileGenerator(testDirectories);
 
         testDirectories.onTestDirectorySearchCompleted(this.directorySearchCompleted, this);
 
@@ -61,6 +65,9 @@ export class JestTestExplorer {
                 .then(() => vscode.commands.executeCommand("workbench.view.extension.test", "workbench.view.extension.test"))
                 .then(() => this._tree.reveal(test, { select: false, focus: true, expand: 3 }))
                 .then(() => { this._testCommands.debugTest(test); });
+        });
+        this.registerCommand("generateTestFile", (uri: vscode.Uri) => {
+            this._testFileGenerator.generateTestFiles(uri);
         });
     }
 

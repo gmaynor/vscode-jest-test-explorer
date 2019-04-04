@@ -14,11 +14,38 @@ export const readfileP = promisify(fs.readFile);
 export const statP = promisify(fs.stat);
 /* Promisify version of fs.exists */
 export const existsP = promisify(fs.exists);
+/* Promisify version of fs.mkdir */
+export const mkdirP = promisify(fs.mkdir);
+/* Promisify version of fs.open */
+export const openP = promisify(fs.open);
+/* Creates a directory and all of its ancestor directories (as needed) */
+export function mkdirRecursive(path: string) {
+    return mkdirP(path, { recursive: true });
+}
+/* Promisify version of fs.writeFile */
+export const writeFileP = promisify(fs.writeFile);
+
+/*
+    writes a file after first creating its containing directory structure if needed
+*/
+export async function writeFile(path: string, data: string | Buffer) {
+    const parts = path.split('/');
+    const dirPath = parts.slice(0, parts.length - 1).join('/');
+    return existsP(dirPath).then(exists => {
+        if (exists) {
+            writeFileP(path, data);
+        }
+        else {
+            mkdirRecursive(dirPath).then(() => writeFileP(path, data));
+        }
+    });
+}
 
 export const DefaultPosition: vscode.Position = new vscode.Position(0.01, 0.01);
 export const DefaultRange: vscode.Range = new vscode.Range(DefaultPosition, DefaultPosition);
 
 export interface IJestDirectory {
+    projectName: string;
     projectPath: string;
     jestPath: string;
     configPath: string;
@@ -71,6 +98,7 @@ export class Config {
     private static autoExpandTree: boolean;
     private static showCodeLens: boolean;
     private static showStatusDecorations: boolean;
+    private static generatedTestFileLocation: string;
     private static collectCoverage: boolean;
     private static showCoverage: boolean;
     private static addProblems: boolean;
@@ -105,6 +133,10 @@ export class Config {
 
     public static get showCoverageEnabled(): boolean {
         return Config.collectCoverage && Config.showCoverage;
+    }
+
+    public static get testFileLocation(): string {
+        return Config.generatedTestFileLocation;
     }
 
     public static get decorationFailed(): string {
@@ -151,6 +183,7 @@ export class Config {
         Config.addProblems = configuration.get<boolean>("addProblems", true);
         Config.collectCoverage = configuration.get<boolean>("collectCoverage", false);
         Config.showCoverage = configuration.get<boolean>("showCoverage", false);
+        Config.generatedTestFileLocation = configuration.get<string>("generatedTestFileLocation", "");
         Config.failed = Config.getDecorationText(configuration, "decorationFailed", "\u2715"); // Multiplication Sign
         Config.passed = Config.getDecorationText(configuration, "decorationPassed", osx ? "\u2705" : "\u2714"); // White Heavy Check Mark / Heavy Check Mark
         Config.skipped = Config.getDecorationText(configuration, "decorationSkipped", "\u26a0"); // Warning

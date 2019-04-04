@@ -38,6 +38,14 @@ export class TestDirectories {
         return this.executors.slice();
     }
 
+    public getJestDirectoryForFile(filePath: string): IJestDirectory | undefined {
+        if (!this.executors.length) {
+            return;
+        }
+
+        return this.executors.find(jd => filePath.startsWith(jd.projectPath));
+    }
+
     private async findExecutors(): Promise<void> {
         this.executors = [];
 
@@ -49,7 +57,13 @@ export class TestDirectories {
         vscode.workspace.workspaceFolders.forEach(x => wsfExecPromises.push(this.getJestTestDirectories(x.uri.fsPath).then((dirs: string[]) => {
             const dirPromises: Promise<IJestDirectory>[] = [];
             dirs.forEach(dir => { 
-                dirPromises.push( this.getJestConfigPath(dir).then(configPath => { return <IJestDirectory>{ projectPath: dir, jestPath: path.normalize(path.resolve(dir, this.jestExecSubPath)), configPath: configPath, workspaceFolder: x }; }));
+                dirPromises.push( this.getJestConfigPath(dir).then(configPath => { 
+                    const pathParts = dir.split('/');
+                    return <IJestDirectory>{ projectName: pathParts[pathParts.length - 1],
+                                             projectPath: dir, 
+                                             jestPath: path.normalize(path.resolve(dir, this.jestExecSubPath)), 
+                                             configPath: configPath, 
+                                             workspaceFolder: x }; }));
             });
             return Promise.all(dirPromises);
         })));
