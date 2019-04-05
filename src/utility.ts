@@ -170,7 +170,7 @@ export class Config {
     }
 
     public static getConfiguration(): vscode.WorkspaceConfiguration {
-        return vscode.workspace.getConfiguration("jest-test-explorer");
+        return vscode.workspace.getConfiguration("jester");
     }
 
     public static updateCache() {

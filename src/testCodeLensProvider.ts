@@ -19,7 +19,7 @@ class RunTestCodeLens extends CodeLens {
 
         const cmd: Command = {
             title: lensTitle,
-            command: "jest-test-explorer.runTestInContext",
+            command: "jester.runTestInContext",
             tooltip: 'Runs the specified test(s)',
             arguments: [testNode]
         };
@@ -36,7 +36,7 @@ class DebugTestCodeLens extends CodeLens {
 
         const cmd: Command = {
             title: 'debug test',
-            command: "jest-test-explorer.debugTestInContext",
+            command: "jester.debugTestInContext",
             tooltip: 'Debugs the specified test',
             arguments: [testNode]
         };

@@ -87,7 +87,7 @@ export class JestTestExplorerTreeDataProvider implements TreeDataProvider<ITestN
             collapsibleState: element.isContainer ? Config.defaultCollapsibleState : void 0,
             contextValue: element.isContainer ? 'folder' : 'test',
             command: element.isContainer ? undefined : {
-                command: "jest-test-explorer.gotoTest",
+                command: "jester.gotoTest",
                 title: "",
                 arguments: [element],
             }

@@ -50,7 +50,7 @@ export class Problems {
 
     constructor() {
         if (Config.addProblemsEnabled) {
-            this._diagnosticCollection = vscode.languages.createDiagnosticCollection("jest-test-explorer");
+            this._diagnosticCollection = vscode.languages.createDiagnosticCollection("jester");
             this._disposables.addDisposble("diagnositcs", this._diagnosticCollection);
             this._disposables.addDisposble("testsUpdating", TestNodeManager.onTestsUpdating(this.handleTestsUpdating, this));
             this._disposables.addDisposble("testsUpdated", TestNodeManager.onTestsUpdated(this.addTestResults, this));

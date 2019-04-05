@@ -85,7 +85,7 @@ export class JestTestExplorer {
     }
 
     private registerCommand(name: string, callback: any, thisArg?: any) {
-        this._disposables.addDisposble(`command_${name}`, vscode.commands.registerCommand(`jest-test-explorer.${name}`, callback, thisArg));
+        this._disposables.addDisposble(`command_${name}`, vscode.commands.registerCommand(`jester.${name}`, callback, thisArg));
     }
 
     private directorySearchCompleted(dirs: IJestDirectory[]) {
@@ -103,11 +103,11 @@ export class JestTestExplorer {
 
     private handleConfigChanged(e: vscode.ConfigurationChangeEvent) {
 
-        if (e.affectsConfiguration('jest-test-explorer')) {
+        if (e.affectsConfiguration('jester')) {
             Config.updateCache();
             this.manageOptionals();
         }
-        if (e.affectsConfiguration('jest-test-explorer.useTreeView')) {
+        if (e.affectsConfiguration('jester.useTreeView')) {
             this._treeData.refresh();
         }
     }
