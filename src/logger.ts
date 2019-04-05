@@ -191,7 +191,7 @@ export class Log {
 
 export interface InspectOptions extends util.InspectOptions { }
 
-const defaultOutput = "Jest Test Explorer";
+const defaultOutput = "Jester";
 const Logger = new Log(defaultOutput);
 
 export default Logger;

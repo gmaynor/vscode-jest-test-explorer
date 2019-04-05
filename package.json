@@ -2,7 +2,7 @@
 	"name": "jester",
 	"displayName": "Jester",
 	"description": "Jest Test Explorer for Visual Studio Code",
-	"version": "0.1.3",
+	"version": "0.1.4",
 	"preview": true,
 	"author": "Gibbs Maynor <g.maynor@gmail.com>",
 	"publisher": "gmaynor",

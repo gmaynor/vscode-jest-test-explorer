@@ -168,7 +168,6 @@ export class TestFileGenerator {
     Logger.info(`generating test file '${testFilePath}`);
 
     const lines: string[] = [];
-    lines.push("import React from 'react';");
     let importName = isDefault ? classDecl.id.name : `{ ${classDecl.id.name} }`;
     lines.push(`import ${importName} from "${this.getImportFromString(filePath.split('/'), pathParts)}";`);
     lines.push('');
@@ -188,7 +187,7 @@ export class TestFileGenerator {
       lines.push('');
       lines.push(`${indent}test('${method}', () => {`);
       lines.push(`${indent}    `);
-      lines.push(`${indent}    expect(true).toBe(false);`);
+      lines.push(`${indent}    expect('unimplemented test to fail').toBe('true');`);
       lines.push(`${indent}});`);
     });
 
@@ -215,7 +214,6 @@ export class TestFileGenerator {
     Logger.info(`generating test file '${testFilePath}`);
 
     const lines: string[] = [];
-    lines.push("import React from 'react';");
     let importName = isDefault ? fn.id.name : `{ ${fn.id.name} }`;
     lines.push(`import ${importName} from "${this.getImportFromString(filePath.split('/'), pathParts)}";`);
     lines.push('');
@@ -232,7 +230,7 @@ export class TestFileGenerator {
     lines.push('');
     lines.push(`${indent}test('${fn.id.name}', () => {`);
     lines.push(`${indent}    `);
-    lines.push(`${indent}    expect(true).toBe(false);`);
+    lines.push(`${indent}    expect('unimplemented test to fail').toBe('true');`);
     lines.push(`${indent}});`);
 
     namespaceParts.forEach(nsPart => {
