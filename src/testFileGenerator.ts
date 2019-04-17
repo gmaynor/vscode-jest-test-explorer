@@ -169,7 +169,7 @@ export class TestFileGenerator {
 
     const lines: string[] = [];
     let importName = isDefault ? classDecl.id.name : `{ ${classDecl.id.name} }`;
-    lines.push(`import ${importName} from "${this.getImportFromString(filePath.split('/'), pathParts)}";`);
+    lines.push(`import ${importName} from '${this.getImportFromString(filePath.split('/'), pathParts)}';`);
     lines.push('');
 
     let dIdx = 0;
@@ -215,7 +215,7 @@ export class TestFileGenerator {
 
     const lines: string[] = [];
     let importName = isDefault ? fn.id.name : `{ ${fn.id.name} }`;
-    lines.push(`import ${importName} from "${this.getImportFromString(filePath.split('/'), pathParts)}";`);
+    lines.push(`import ${importName} from '${this.getImportFromString(filePath.split('/'), pathParts)}';`);
     lines.push('');
 
     let dIdx = 0;
@@ -257,6 +257,9 @@ export class TestFileGenerator {
     for (let i = idx - 1; i < fileNameParts.length; i++) {
       retArry.push(fileNameParts[i]);
     }
+
+    const fileName = fileNameParts[fileNameParts.length - 1];
+    retArry[retArry.length - 1] = fileName.slice(0, fileName.lastIndexOf('.'));
 
     return retArry.join('/');
   }

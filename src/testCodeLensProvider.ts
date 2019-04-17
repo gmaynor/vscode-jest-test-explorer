@@ -35,9 +35,9 @@ class DebugTestCodeLens extends CodeLens {
         super(new Range(start, start));
 
         const cmd: Command = {
-            title: 'debug test',
+            title: testNode.isContainer ? 'debug tests' : 'debug test',
             command: "jester.debugTestInContext",
-            tooltip: 'Debugs the specified test',
+            tooltip: 'Debugs the specified test(s)',
             arguments: [testNode]
         };
 
@@ -85,9 +85,7 @@ class TestCodeLensProvider implements CodeLensProvider {
         if (resultsForFile.length) {
             resultsForFile.forEach(x => {
                 mapped.push(new RunTestCodeLens(document.uri.path, x));
-                if (!x.isContainer) {
-                    mapped.push(new DebugTestCodeLens(document.uri.path, x));
-                }
+                mapped.push(new DebugTestCodeLens(document.uri.path, x));
             });
         }
 

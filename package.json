@@ -2,7 +2,7 @@
 	"name": "jester",
 	"displayName": "Jester",
 	"description": "Jest Test Explorer for Visual Studio Code",
-	"version": "0.1.4",
+	"version": "0.1.5",
 	"preview": true,
 	"author": "Gibbs Maynor <g.maynor@gmail.com>",
 	"publisher": "gmaynor",
@@ -145,7 +145,6 @@
 				},
 				{
 					"command": "jester.debugTest",
-					"when": "viewItem == test",
 					"group": "inline@1"
 				},
 				{

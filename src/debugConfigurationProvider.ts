@@ -4,10 +4,10 @@ import { ITestNode } from './nodes';
 
 export class DebugConfigurationProvider implements vscode.DebugConfigurationProvider {
   private _test: ITestNode | undefined;
-  
+
   public constructor(private dirs: IJestDirectory[],
-                     private getJestCommand: (jestDir: IJestDirectory, test?: ITestNode) => { command: string, commandArgs: string[] }) {
-    
+    private getJestCommand: (jestDir: IJestDirectory, test?: ITestNode) => { command: string, commandArgs: string[] }) {
+
   }
 
   /**
@@ -45,7 +45,12 @@ export class DebugConfigurationProvider implements vscode.DebugConfigurationProv
       fqName = fqName.replace(/:/gi, ' ');
       fqName = fqName.replace(/\(/gi, '\\(');
       fqName = fqName.replace(/\)/gi, '\\)');
-      debugConfiguration.args.push(fqName === '' ? fqName : `${fqName}$`);
+      if (this._test.isContainer) {
+        debugConfiguration.args.push(fqName === '' ? fqName : `${fqName}`);
+      }
+      else {
+        debugConfiguration.args.push(fqName === '' ? fqName : `${fqName}$`);
+      }
     }
 
     this._test = undefined;

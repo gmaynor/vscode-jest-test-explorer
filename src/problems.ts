@@ -33,11 +33,10 @@ export class Problems {
                         const parts = failedLine.substring(0, failedLine.length - 1).split(':').map(x => parseInt(x));
                         const point = new vscode.Position(parts[0] - 1, parts[1]);
                         const foundExpect = test.testNode.expects ? test.testNode.expects.find(expect => expect.range(filePath).contains(point)) : undefined;
-                        if (foundExpect) {
-                            const diag = new vscode.Diagnostic(foundExpect.range(filePath), fm, vscode.DiagnosticSeverity.Error);
-                            diag.source = 'Jest';
-                            groups[filePath].push(diag);
-                        }
+                        const diagRange = foundExpect ? foundExpect.range(filePath) : new vscode.Range(parts[0] - 1, 0, parts[0] - 1, 255);
+                        const diag = new vscode.Diagnostic(diagRange, fm, vscode.DiagnosticSeverity.Error);
+                        diag.source = 'Jest';
+                        groups[filePath].push(diag);
                     }
                 });
             }
