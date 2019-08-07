@@ -1,7 +1,7 @@
 
-import * as Babylon from 'babel-types';
-import { File as BabylonFile, Node as BabylonNode } from 'babel-types';
-import { BabylonOptions, parse as babylonParse, PluginName } from 'babylon';
+import * as Babylon from '@babel/types';
+import { File as BabylonFile, Node as BabylonNode } from '@babel/types';
+import { ParserOptions, parse as babylonParse, ParserPlugin } from '@babel/parser';
 import * as vscode from 'vscode';
 import Logger from './logger';
 import { readfileP, existsP, IJestDirectory, Config, writeFile } from './utility';
@@ -17,8 +17,8 @@ async function _getASTfor(file: vscode.Uri): Promise<BabylonFile> {
 }
 
 function _getASTforContent(content: string): BabylonFile {
-  const plugins: PluginName[] = ['jsx', 'classConstructorCall', 'doExpressions', 'objectRestSpread', 'decorators', 'classProperties', 'exportExtensions', 'asyncGenerators', 'functionBind', 'functionSent', 'dynamicImport'];
-  const config: BabylonOptions = { plugins, sourceType: 'module' };
+  const plugins: ParserPlugin[] = ['jsx', 'doExpressions', 'objectRestSpread', 'classProperties', 'asyncGenerators', 'functionBind', 'functionSent', 'dynamicImport'];
+  const config: ParserOptions = { plugins, sourceType: 'module' };
 
   return babylonParse(content, config);
 }
@@ -42,7 +42,7 @@ const isConnectCall = (node: BabylonNode) => {
   }
   let callee = call.callee;
   while (Babylon.isCallExpression(callee)) {
-      callee = (callee as Babylon.CallExpression).callee;
+    callee = (callee as Babylon.CallExpression).callee;
   }
   return (callee as Babylon.Identifier).name === 'connect';
 };
@@ -86,11 +86,11 @@ export class TestFileGenerator {
       }
 
       if (Babylon.isClassDeclaration(namedNode)) {
-        name = (namedNode as Babylon.ClassDeclaration).id.name;
+        name = ((namedNode as Babylon.ClassDeclaration).id as Babylon.Identifier).name;
         exportType = 'class';
       }
       else if (Babylon.isFunctionDeclaration(namedNode)) {
-        name = (namedNode as Babylon.FunctionDeclaration).id.name;
+        name = ((namedNode as Babylon.FunctionDeclaration).id as Babylon.Identifier).name;
         exportType = 'function';
       }
       else if (Babylon.isVariableDeclarator(namedNode)) {
@@ -118,7 +118,17 @@ export class TestFileGenerator {
       }
       else if (Babylon.isExportNamedDeclaration(namedNode)) {
         namedNode.specifiers.forEach(spec => {
-          const found = out.find(o => o.name === spec.local.name);
+          let found = undefined;
+          if (Babylon.isExportDefaultDeclaration(namedNode)) {
+            found = out.find(o => o.name === (spec as Babylon.ExportDefaultSpecifier).exported.name);
+          }
+          else if (Babylon.isExportNamespaceSpecifier(namedNode)) {
+            found = out.find(o => o.name === (spec as Babylon.ExportNamespaceSpecifier).exported.name);
+          }
+          else {
+            found = out.find(o => o.name === (spec as Babylon.ExportSpecifier).local.name);
+          }
+          //const found = out.find(o => o.name === spec.local.name);
           if (found) {
             //out.push({ node: found.node, name: spec.local.name, isExported, isDefault, exportType: found.exportType });
             found.isExported = isExported;
@@ -156,9 +166,11 @@ export class TestFileGenerator {
 
   private async writeTestFileForClass(classDecl: Babylon.ClassDeclaration, filePath: string, isDefault: boolean) {
     const { pathParts, namespaceParts } = this.getPathParts(filePath);
-    namespaceParts.push(classDecl.id.name);
+    const className = classDecl.id ? classDecl.id.name : " ";
+    
+    namespaceParts.push(className);
     const fileNameParts = pathParts[pathParts.length - 1].split('.');
-    pathParts[pathParts.length - 1] = `${classDecl.id.name}.tests.${fileNameParts[fileNameParts.length - 1]}`;
+      pathParts[pathParts.length - 1] = `${className}.tests.${fileNameParts[fileNameParts.length - 1]}`;
     const testFilePath = pathParts.join('/');
     const fileExists = await existsP(testFilePath);
     if (fileExists) {
@@ -168,7 +180,7 @@ export class TestFileGenerator {
     Logger.info(`generating test file '${testFilePath}`);
 
     const lines: string[] = [];
-    let importName = isDefault ? classDecl.id.name : `{ ${classDecl.id.name} }`;
+    let importName = isDefault ? className : `{ ${className} }`;
     lines.push(`import ${importName} from '${this.getImportFromString(filePath.split('/'), pathParts)}';`);
     lines.push('');
 
@@ -204,7 +216,8 @@ export class TestFileGenerator {
   private async writeTestFileForFunction(fn: Babylon.FunctionDeclaration, filePath: string, isDefault: boolean) {
     const { pathParts, namespaceParts } = this.getPathParts(filePath);
     const fileNameParts = pathParts[pathParts.length - 1].split('.');
-    pathParts[pathParts.length - 1] = `${fn.id.name}.tests.${fileNameParts[fileNameParts.length - 1]}`;
+    const fnName = fn.id ? fn.id.name : " ";
+    pathParts[pathParts.length - 1] = `${fnName}.tests.${fileNameParts[fileNameParts.length - 1]}`;
     const testFilePath = pathParts.join('/');
     const fileExists = await existsP(testFilePath);
     if (fileExists) {
@@ -214,7 +227,7 @@ export class TestFileGenerator {
     Logger.info(`generating test file '${testFilePath}`);
 
     const lines: string[] = [];
-    let importName = isDefault ? fn.id.name : `{ ${fn.id.name} }`;
+    let importName = isDefault ? fnName : `{ ${fnName} }`;
     lines.push(`import ${importName} from '${this.getImportFromString(filePath.split('/'), pathParts)}';`);
     lines.push('');
 
@@ -226,9 +239,9 @@ export class TestFileGenerator {
       dIdx++;
       indent += '    ';
     });
-    
+
     lines.push('');
-    lines.push(`${indent}test('${fn.id.name}', () => {`);
+    lines.push(`${indent}test('${fnName}', () => {`);
     lines.push(`${indent}    `);
     lines.push(`${indent}    expect('unimplemented test to fail').toBe('true');`);
     lines.push(`${indent}});`);

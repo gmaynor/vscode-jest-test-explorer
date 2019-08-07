@@ -48,7 +48,7 @@ export interface IJestDirectory {
     projectName: string;
     projectPath: string;
     jestPath: string;
-    configPath: string;
+    configPath: string | null;
     workspaceFolder: vscode.WorkspaceFolder;
 }
 

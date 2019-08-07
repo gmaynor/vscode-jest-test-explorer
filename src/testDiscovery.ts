@@ -13,9 +13,9 @@
  *
  */
 
-import * as Babylon from 'babel-types';
-import { File as BabylonFile, Node as BabylonNode } from 'babel-types';
-import { BabylonOptions, parse as babylonParse, PluginName } from 'babylon';
+import * as Babylon from '@babel/types';
+import { File as BabylonFile, Node as BabylonNode } from '@babel/types';
+import { ParserOptions, parse as babylonParse, ParserPlugin } from '@babel/parser';
 import * as vscode from 'vscode';
 import { Executor } from './executor';
 import Logger from './logger';
@@ -101,8 +101,8 @@ async function _getASTfor(file: JestTestFile): Promise<GetAstResult> {
 }
 
 function _getASTforContent(content: string, file: JestTestFile): GetAstResult {
-  const plugins: PluginName[] = ['estree', 'jsx', 'classConstructorCall', 'doExpressions', 'objectRestSpread', 'decorators', 'classProperties', 'exportExtensions', 'asyncGenerators', 'functionBind', 'functionSent', 'dynamicImport'];
-  const config: BabylonOptions = { plugins, sourceType: 'module' };
+  const plugins: ParserPlugin[] = ['estree', 'jsx', 'doExpressions', 'objectRestSpread', 'classProperties', 'asyncGenerators', 'functionBind', 'functionSent', 'dynamicImport'];
+  const config: ParserOptions = { plugins, sourceType: 'module' };
 
   return { babylonFile: babylonParse(content, config), jestTestFile: file, fileText: content };
 }
@@ -141,12 +141,14 @@ const getGetNameAndRange = (ast: GetAstResult) => {
     }
 
     const cExp = (<Babylon.CallExpression>(<Babylon.ExpressionStatement>bNode).expression);
-    const arg: Babylon.Expression | Babylon.SpreadElement | null = cExp.arguments.length ? cExp.arguments[0] : null;
-    const sourceLoc: Babylon.SourceLocation = arg ? arg.loc : cExp.loc;
+    const arg: Babylon.Expression | Babylon.SpreadElement | Babylon.JSXNamespacedName | Babylon.ArgumentPlaceholder | null = cExp.arguments.length ? cExp.arguments[0] : null;
+    const sourceLoc: Babylon.SourceLocation | null = arg ? arg.loc : cExp.loc;
     let name: string | null = null;
 
     if (Babylon.isTemplateLiteral(arg)) {
-      name = ast.fileText.substring(arg.start + 1, arg.end - 1);
+      const start = arg.start || 0;
+      const end = arg.end || 1;
+      name = ast.fileText.substring(start + 1, end - 1);
     } else {
       try {
         name = (arg as Babylon.StringLiteral).value;
@@ -163,8 +165,8 @@ const getGetNameAndRange = (ast: GetAstResult) => {
 
     return {
       name: name,
-      range: new vscode.Range(bNode.loc.start.line - 1, bNode.loc.start.column, bNode.loc.end.line - 1, bNode.loc.end.column),
-      nameRange: new vscode.Range(sourceLoc.start.line - 1, sourceLoc.start.column, sourceLoc.end.line - 1, sourceLoc.end.column)
+      range: bNode && bNode.loc ? new vscode.Range(bNode.loc.start.line - 1, bNode.loc.start.column, bNode.loc.end.line - 1, bNode.loc.end.column) : DefaultRange,
+      nameRange: sourceLoc ? new vscode.Range(sourceLoc.start.line - 1, sourceLoc.start.column, sourceLoc.end.line - 1, sourceLoc.end.column) : DefaultRange
     };
   };
 };
@@ -196,7 +198,7 @@ const getNameAndRangeForExpect = (bNode: BabylonNode): NameAndRanges => {
 
   return {
     name: name,
-    range: new vscode.Range(bNode.loc.start.line - 1, bNode.loc.start.column, bNode.loc.end.line - 1, bNode.loc.end.column),
+    range: bNode && bNode.loc ? new vscode.Range(bNode.loc.start.line - 1, bNode.loc.start.column, bNode.loc.end.line - 1, bNode.loc.end.column) : DefaultRange,
     nameRange: sourceLoc ? new vscode.Range(sourceLoc.start.line - 1, sourceLoc.start.column, sourceLoc.end.line - 1, sourceLoc.end.column) : DefaultRange
   };
 
